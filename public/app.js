@@ -585,7 +585,8 @@
     typewriterAborted = false;
     isSpeaking = true;
     standUp(item.speakerId);
-    updateCurrentSpeechBar(getDisplayName(item.speakerId, item.speakerLabel), item.roleType || "debater", side, "");
+    // Show full text in current-speech bar so it stays in sync with TTS (no typewriter there)
+    updateCurrentSpeechBar(getDisplayName(item.speakerId, item.speakerLabel), item.roleType || "debater", side, text);
 
     clearCurrentSpeakerHighlight();
     const textSpan = createTranscriptLine(getDisplayName(item.speakerId, item.speakerLabel), item.roleType || "debater", side, item.speakerId, true, "speech", speechMeta);
@@ -600,8 +601,10 @@
     });
     const { voice, rate, pitch, volume } = VOICE_MANAGER.pick(item.speakerId, item.roleType);
     const textForSpeech = stripEmojiForSpeech(text) || " ";
-    const estimatedMs = estimateSpeechDurationMs(textForSpeech, rate);
     const speakRate = 0.95;
+    const estimatedMs = estimateSpeechDurationMs(textForSpeech, rate);
+    // Scale typewriter duration by 1/rate so transcript reveal aligns better with TTS (utterance.rate makes TTS slower)
+    const typewriterDurationMs = Math.round(estimatedMs / speakRate);
     ttsLog("start", { speakerId: item.speakerId, textLen: textForSpeech.length, estimatedMs, queueLength: speakQueue.length });
 
     const utter = new SpeechSynthesisUtterance(textForSpeech);
@@ -657,7 +660,8 @@
       else playNextSpeech();
     }, maxWaitMs);
 
-    runTypewriter(textSpan || document.createElement("span"), text, estimatedMs, () => onUtteranceDone(), currentSpeechText);
+    // Typewriter only for transcript line; current-speech bar already shows full text for TTS sync
+    runTypewriter(textSpan || document.createElement("span"), text, typewriterDurationMs, () => onUtteranceDone(), null);
 
     function fallbackSpeak() {
       try { window.speechSynthesis.resume(); } catch (e) {}
@@ -862,10 +866,7 @@
           startBtn.disabled = false;
           hideYourTurnPopup();
           const motion = (topicInput && topicInput.value) ? topicInput.value.trim() : "";
-          const turns = transcriptTurnsForConclusion
-            .filter((t) => (t.type ?? "speech") === "speech")
-            .map((t) => ({ speakerLabel: t.speakerLabel || "", text: t.text || "", side: t.side || "", turnIndex: t.turnIndex }));
-          if (motion) startBackgroundConclusion(motion, turns);
+          if (motion) startBackgroundConclusion(motion);
         }
       } else if (data.type === "error") {
         const code = data.code || 500;
@@ -1086,7 +1087,10 @@
           });
         } else if (sec.id === "media") {
           items.forEach((it) => {
-            lines.push("- **" + (it.kind || "") + ":** " + (it.title || "") + " by " + (it.creator || "") + (it.whyRelevant ? " — " + it.whyRelevant : ""));
+            const title = it.title || "";
+            const url = (it.url || "").trim();
+            const link = url ? "[" + title + "](" + url + ")" : title;
+            lines.push("- **" + (it.kind || "Media") + ":** " + link + " by " + (it.creator || "") + (it.whyRelevant ? " — " + it.whyRelevant : ""));
           });
         } else if (sec.id === "argument_map") {
           items.forEach((it) => {
@@ -1116,26 +1120,26 @@
     return lines.join("\n").trim();
   }
 
-  /** Render one conclusion section as HTML (for collapsible content). */
+  /** Render one conclusion section as HTML (flat, all visible). */
   function renderConclusionSection(sec) {
     const items = sec.items || [];
     let body = "";
     if (sec.id === "definitions") {
-      body = "<ul class=\"conclusion-list\">" + items.map((it) => "<li>" + escapeHtml(it.text || "") + (it.turnRefs && it.turnRefs.length ? " <span class=\"conclusion-turn-refs\">[" + it.turnRefs.join(", ") + "]</span>" : "") + "</li>").join("") + "</ul>";
+      body = "<ul class=\"conclusion-list\">" + items.map((it) => "<li>" + escapeHtml(it.text || "") + "</li>").join("") + "</ul>";
     } else if (sec.id === "argument_map") {
-      body = "<ul class=\"conclusion-list conclusion-argument-map\">" + items.map((it) => "<li><strong>" + escapeHtml(it.node || "") + "</strong> <span class=\"conclusion-side conclusion-side--" + (it.side === "Affirmative" ? "aff" : "neg") + "\">" + escapeHtml(it.side || "") + "</span>" + (it.supports && it.supports.length ? "<br>Supports: " + escapeHtml(it.supports.join("; ")) : "") + (it.attacks && it.attacks.length ? "<br>Attacks: " + escapeHtml(it.attacks.join("; ")) : "") + (it.turnRefs && it.turnRefs.length ? " <span class=\"conclusion-turn-refs\">[" + it.turnRefs.join(", ") + "]</span>" : "") + "</li>").join("") + "</ul>";
+      body = "<ul class=\"conclusion-list conclusion-argument-map\">" + items.map((it) => "<li><strong>" + escapeHtml(it.node || "") + "</strong> <span class=\"conclusion-side conclusion-side--" + (it.side === "Affirmative" ? "aff" : "neg") + "\">" + escapeHtml(it.side || "") + "</span>" + (it.supports && it.supports.length ? "<br>Supports: " + escapeHtml(it.supports.join("; ")) : "") + (it.attacks && it.attacks.length ? "<br>Attacks: " + escapeHtml(it.attacks.join("; ")) : "") + "</li>").join("") + "</ul>";
     } else if (sec.id === "core_clashes") {
-      body = "<ul class=\"conclusion-list\">" + items.map((it) => "<li><strong>" + escapeHtml(it.clash || "") + "</strong><br>Aff: " + escapeHtml(it.aff || "") + "<br>Neg: " + escapeHtml(it.neg || "") + (it.turnRefs && it.turnRefs.length ? " <span class=\"conclusion-turn-refs\">[" + it.turnRefs.join(", ") + "]</span>" : "") + "</li>").join("") + "</ul>";
+      body = "<ul class=\"conclusion-list\">" + items.map((it) => "<li><strong>" + escapeHtml(it.clash || "") + "</strong><br>Aff: " + escapeHtml(it.aff || "") + "<br>Neg: " + escapeHtml(it.neg || "") + "</li>").join("") + "</ul>";
     } else if (sec.id === "assumptions") {
-      body = "<ul class=\"conclusion-list\">" + items.map((it) => "<li><span class=\"conclusion-who\">" + escapeHtml(it.who || "") + "</span>: " + escapeHtml(it.text || "") + (it.turnRefs && it.turnRefs.length ? " <span class=\"conclusion-turn-refs\">[" + it.turnRefs.join(", ") + "]</span>" : "") + "</li>").join("") + "</ul>";
+      body = "<ul class=\"conclusion-list\">" + items.map((it) => "<li><span class=\"conclusion-who\">" + escapeHtml(it.who || "") + "</span>: " + escapeHtml(it.text || "") + "</li>").join("") + "</ul>";
     } else if (sec.id === "steelman") {
-      body = "<ul class=\"conclusion-list\">" + items.map((it) => "<li><strong>" + escapeHtml(it.targetSide || "") + "</strong><br>Steelman: " + escapeHtml(it.steelman || "") + "<br>Best reply: " + escapeHtml(it.bestReply || "") + (it.turnRefs && it.turnRefs.length ? " <span class=\"conclusion-turn-refs\">[" + it.turnRefs.join(", ") + "]</span>" : "") + "</li>").join("") + "</ul>";
+      body = "<ul class=\"conclusion-list\">" + items.map((it) => "<li><strong>" + escapeHtml(it.targetSide || "") + "</strong><br>Steelman: " + escapeHtml(it.steelman || "") + "<br>Best reply: " + escapeHtml(it.bestReply || "") + "</li>").join("") + "</ul>";
     } else if (sec.id === "novel_angles") {
       body = "<ul class=\"conclusion-list conclusion-novel-angles\">" + items.map((it) => "<li>" + escapeHtml(it.angle || "") + (it.whyItMatters ? "<br><em class=\"conclusion-why-matters\">" + escapeHtml(it.whyItMatters) + "</em>" : "") + "</li>").join("") + "</ul>";
     } else if (sec.id === "empirical") {
       body = "<ul class=\"conclusion-list\">" + items.map((it) => "<li>" + escapeHtml(it.question || "") + "<br>What would change your mind: " + escapeHtml(it.whatWouldChangeYourMind || "") + "</li>").join("") + "</ul>";
     } else if (sec.id === "verdict") {
-      body = "<ul class=\"conclusion-list\">" + items.map((it) => "<li><strong>" + escapeHtml(it.winner || "") + "</strong><ul>" + (it.reasoning || []).map((r) => "<li>" + escapeHtml(r) + "</li>").join("") + "</ul>" + (it.keyTurnRefs && it.keyTurnRefs.length ? " <span class=\"conclusion-turn-refs\">[" + it.keyTurnRefs.join(", ") + "]</span>" : "") + "</li>").join("") + "</ul>";
+      body = "<ul class=\"conclusion-list\">" + items.map((it) => "<li><strong>" + escapeHtml(it.winner || "") + "</strong><ul>" + (it.reasoning || []).map((r) => "<li>" + escapeHtml(r) + "</li>").join("") + "</ul></li>").join("") + "</ul>";
     } else if (sec.id === "literature") {
       body = "<ul class=\"conclusion-list conclusion-literature\">" + items.map((it) => {
         const url = (it.url || (it.doi ? "https://doi.org/" + it.doi : "")).trim();
@@ -1146,7 +1150,17 @@
         return "<li class=\"conclusion-lit-item\">" + link + auth + (meta ? " (" + escapeHtml(meta) + ")" : "") + rel + "</li>";
       }).join("") + "</ul>";
     } else if (sec.id === "media") {
-      body = "<ul class=\"conclusion-list conclusion-media\">" + items.map((it) => "<li><strong>" + escapeHtml(it.kind || "") + ":</strong> " + escapeHtml(it.title || "") + " by " + escapeHtml(it.creator || "") + (it.year ? " (" + it.year + ")" : "") + "<br><span class=\"conclusion-why\">" + escapeHtml(it.whyRelevant || "") + "</span>" + (it.spoilerFree === false ? " <span class=\"conclusion-spoiler\">Spoilers</span>" : "") + "</li>").join("") + "</ul>";
+      body = "<ul class=\"conclusion-list conclusion-media\">" + items.map((it) => {
+        const kind = (it.kind || "Media").trim();
+        const title = escapeHtml(it.title || "");
+        const creator = escapeHtml(it.creator || "");
+        const url = (it.url || "").trim();
+        const titleEl = url ? "<a href=\"" + escapeHtml(url) + "\" target=\"_blank\" rel=\"noopener\">" + title + "</a>" : title;
+        const why = it.whyRelevant ? "<br><span class=\"conclusion-why\">" + escapeHtml(it.whyRelevant) + "</span>" : "";
+        const spoiler = it.spoilerFree === false ? " <span class=\"conclusion-spoiler\">Spoilers</span>" : "";
+        const year = it.year ? " (" + it.year + ")" : "";
+        return "<li class=\"conclusion-media-item\"><span class=\"conclusion-media-kind\">" + escapeHtml(kind) + "</span> " + titleEl + " — " + creator + year + why + spoiler + "</li>";
+      }).join("") + "</ul>";
     } else {
       body = "<ul class=\"conclusion-list\">" + items.map((it) => "<li>" + escapeHtml(typeof it === "string" ? it : (it.text || "")) + "</li>").join("") + "</ul>";
     }
@@ -1154,10 +1168,10 @@
   }
 
   let conclusionAbortController = null;
-  const CONCLUSION_FETCH_TIMEOUT_MS = 8000;
+  const CONCLUSION_FETCH_TIMEOUT_MS = 60000;
 
-  /** Conclusion cache: pre-fetched so clicking Conclusion opens instantly when ready. */
-  let conclusionCache = { motion: "", turnCount: -1, status: "idle", data: null, error: null };
+  /** Conclusion cache: keyed by motion only (topic-only analysis). */
+  let conclusionCache = { motion: "", status: "idle", data: null, error: null };
 
   /** Fill content element with successful conclusion data (shared by fetch and cache). */
   function fillConclusionContent(contentEl, data) {
@@ -1170,13 +1184,13 @@
       html += '<p class="conclusion-meta">' + escapeHtml(data.meta.generatedAt || "") + (data.meta.model ? " · " + escapeHtml(data.meta.model) : "") + "</p>";
     }
     html += "<div class='conclusion-actions'><button type='button' class='conclusion-copy-md' id='conclusionCopyMd'>Copy as Markdown</button></div><div class='conclusion-sections'>";
-    (data.sections || []).forEach((sec, idx) => {
+    (data.sections || []).forEach((sec) => {
       const heading = sec.heading || sec.id || "";
       if (!heading) return;
       const id = "sec-" + (sec.id || Math.random().toString(36).slice(2));
       const body = hasStructuredSections ? renderConclusionSection(sec) : (Array.isArray(sec.bullets) ? "<ul class=\"conclusion-list\">" + sec.bullets.map((b) => "<li>" + escapeHtml(b) + "</li>").join("") + "</ul>" : "");
-      const openAttr = (idx < 2 && (sec.items || []).length > 0) ? " open" : "";
-      html += '<details class="conclusion-section conclusion-section--collapsible" id="' + escapeHtml(id) + '"' + openAttr + '><summary class="conclusion-section-heading">' + escapeHtml(heading) + "</summary><div class=\"conclusion-section-body\">" + body + "</div></details>";
+      const sectionClass = "conclusion-section" + (sec.id === "verdict" ? " conclusion-section--verdict" : "");
+      html += '<div class="' + sectionClass + '" id="' + escapeHtml(id) + '"><h3 class="conclusion-section-heading">' + escapeHtml(heading) + "</h3><div class=\"conclusion-section-body\">" + body + "</div></div>";
     });
     html += "</div>";
     contentEl.innerHTML = html || "<p class=\"conclusion-error\">No content returned.</p>";
@@ -1189,35 +1203,25 @@
     }
   }
 
-  /** Start conclusion fetch in background; cache result. When done, if modal is open and showing loading, update it. */
-  function startBackgroundConclusion(motion, turns) {
+  /** Start topic-only conclusion fetch in background; cache by motion. When done, if modal is open and showing loading, update it. */
+  function startBackgroundConclusion(motion) {
     const motionTrim = (motion || "").trim();
     if (!motionTrim) return;
-    const turnCount = Array.isArray(turns) ? turns.length : 0;
-    if (conclusionCache.motion === motionTrim && conclusionCache.turnCount === turnCount && (conclusionCache.status === "done" || conclusionCache.status === "loading")) return;
-    conclusionCache = { motion: motionTrim, turnCount, status: "loading", data: null, error: null };
-
-    const turnsPayload = Array.isArray(turns)
-      ? turns.map((t, i) => ({
-          speakerLabel: (t && t.speakerLabel) || "",
-          text: (t && t.text) || "",
-          side: (t && t.side) || "",
-          turnIndex: typeof (t && t.turnIndex) === "number" ? t.turnIndex : i + 1
-        }))
-      : [];
+    if (conclusionCache.motion === motionTrim && (conclusionCache.status === "done" || conclusionCache.status === "loading")) return;
+    conclusionCache = { motion: motionTrim, status: "loading", data: null, error: null };
 
     fetch(`${API_BASE}/api/conclusion`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ motion: motionTrim, turns: turnsPayload })
+      body: JSON.stringify({ motion: motionTrim })
     })
       .then((res) => res.json())
       .then((data) => {
         if (data.ok === false || data.error) {
-          conclusionCache = { motion: motionTrim, turnCount, status: "error", data: null, error: (data.error && data.error.message) || data.error || "Conclusion failed" };
+          conclusionCache = { motion: motionTrim, status: "error", data: null, error: (data.error && data.error.message) || data.error || "Analysis failed" };
           return;
         }
-        conclusionCache = { motion: motionTrim, turnCount, status: "done", data, error: null };
+        conclusionCache = { motion: motionTrim, status: "done", data, error: null };
         const content = document.getElementById("conclusionContent");
         const modal = document.getElementById("conclusionModal");
         if (content && modal && !modal.hidden && content.querySelector && content.querySelector(".conclusion-loading")) {
@@ -1225,18 +1229,18 @@
         }
       })
       .catch((err) => {
-        conclusionCache = { motion: motionTrim, turnCount, status: "error", data: null, error: err.message || "Request failed" };
+        conclusionCache = { motion: motionTrim, status: "error", data: null, error: err.message || "Request failed" };
       });
   }
 
-  function runConclusionFetch(content, motion, turns, signal, stopLoading) {
+  function runConclusionFetch(content, motion, signal, stopLoading) {
     let timeoutId = null;
     let progressId = null;
 
     timeoutId = setTimeout(() => {
       timeoutId = null;
       if (conclusionAbortController) conclusionAbortController.abort();
-      content.innerHTML = '<p class="conclusion-error">Request timed out (8s). Try again or use a faster model.</p><button type="button" class="conclusion-retry-btn" id="conclusionRetryBtn">Retry</button>';
+      content.innerHTML = '<p class="conclusion-error">Request timed out. Try again or use a faster model.</p><button type="button" class="conclusion-retry-btn" id="conclusionRetryBtn">Retry</button>';
       document.getElementById("conclusionRetryBtn")?.addEventListener("click", () => openConclusionModal());
       showToast("Conclusion timed out");
     }, CONCLUSION_FETCH_TIMEOUT_MS);
@@ -1244,7 +1248,7 @@
     progressId = setTimeout(() => {
       progressId = null;
       if (signal.aborted) return;
-      content.innerHTML = '<p class="conclusion-loading">Still generating… (max 8s)</p>';
+      content.innerHTML = '<p class="conclusion-loading">Loading...</p>';
     }, 6000);
 
     function clearTimers() {
@@ -1255,7 +1259,7 @@
     fetch(`${API_BASE}/api/conclusion`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ motion, turns }),
+      body: JSON.stringify({ motion }),
       signal
     })
       .then((res) => res.json())
@@ -1264,14 +1268,13 @@
         if (signal.aborted) return;
         stopLoading();
         if (data.ok === false || data.error) {
-          const msg = (data.error && data.error.message) || data.error || "Conclusion failed";
+          const msg = (data.error && data.error.message) || data.error || "Analysis failed";
           content.innerHTML = '<p class="conclusion-error">' + escapeHtml(typeof msg === "string" ? msg : "Conclusion failed") + "</p><button type='button' class='conclusion-retry-btn' id='conclusionRetryBtn'>Retry</button>";
           document.getElementById("conclusionRetryBtn")?.addEventListener("click", () => openConclusionModal());
           showToast(typeof msg === "string" ? msg : "Conclusion failed");
           return;
         }
-        const turnCount = Array.isArray(turns) ? turns.length : 0;
-        conclusionCache = { motion, turnCount, status: "done", data, error: null };
+        conclusionCache = { motion, status: "done", data, error: null };
         fillConclusionContent(content, data);
       })
       .catch((err) => {
@@ -1292,37 +1295,28 @@
     if (!modal || !content) return;
 
     const motion = (topicInput && topicInput.value) ? topicInput.value.trim() : "";
-    const turns = transcriptTurnsForConclusion
-      .filter((t) => (t.type ?? "speech") === "speech")
-      .map((t) => ({
-        speakerLabel: t.speakerLabel || "",
-        text: t.text || "",
-        side: t.side || "",
-        turnIndex: t.turnIndex
-      }));
-    const turnCount = turns.length;
 
     if (!motion) {
       modal.hidden = false;
       modal.setAttribute("aria-hidden", "false");
-      content.innerHTML = '<p class="conclusion-error">Enter a motion/topic first.</p>';
+      content.innerHTML = '<p class="conclusion-error">Enter a topic first.</p>';
       return;
     }
 
     modal.hidden = false;
     modal.setAttribute("aria-hidden", "false");
 
-    if (conclusionCache.motion === motion && conclusionCache.turnCount === turnCount && conclusionCache.status === "done" && conclusionCache.data) {
+    if (conclusionCache.motion === motion && conclusionCache.status === "done" && conclusionCache.data) {
       content.innerHTML = "";
       content.classList.remove("conclusion-loading");
       fillConclusionContent(content, conclusionCache.data);
       return;
     }
-    if (conclusionCache.motion === motion && conclusionCache.turnCount === turnCount && conclusionCache.status === "loading") {
-      content.innerHTML = '<p class="conclusion-loading">Generating conclusion… (will update when ready)</p>';
+    if (conclusionCache.motion === motion && conclusionCache.status === "loading") {
+      content.innerHTML = '<p class="conclusion-loading">Loading...</p>';
       return;
     }
-    if (conclusionCache.motion === motion && conclusionCache.turnCount === turnCount && conclusionCache.status === "error" && conclusionCache.error) {
+    if (conclusionCache.motion === motion && conclusionCache.status === "error" && conclusionCache.error) {
       content.innerHTML = '<p class="conclusion-error">' + escapeHtml(conclusionCache.error) + "</p><button type='button' class='conclusion-retry-btn' id='conclusionRetryBtn'>Retry</button>";
       document.getElementById("conclusionRetryBtn")?.addEventListener("click", () => openConclusionModal());
       return;
@@ -1331,11 +1325,11 @@
     if (conclusionAbortController) conclusionAbortController.abort();
     conclusionAbortController = new AbortController();
     const signal = conclusionAbortController.signal;
-    content.innerHTML = '<p class="conclusion-loading">Generating conclusion… (max 8s)</p>';
+    content.innerHTML = '<p class="conclusion-loading">Loading...</p>';
     function stopLoading() {
       conclusionAbortController = null;
     }
-    runConclusionFetch(content, motion, turns, signal, stopLoading);
+    runConclusionFetch(content, motion, signal, stopLoading);
   }
 
   function closeConclusionModal() {

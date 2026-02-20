@@ -52,7 +52,7 @@ const OPENROUTER_MODEL_CHEAP = (process.env.OPENROUTER_MODEL_CHEAP || "openai/gp
 const OPENROUTER_MODEL_MID = (process.env.OPENROUTER_MODEL_MID || "anthropic/claude-sonnet-4").trim();
 const OPENROUTER_MODEL_EXPENSIVE = (process.env.OPENROUTER_MODEL_EXPENSIVE || "anthropic/claude-opus-4").trim();
 
-/** Conclusion: speed + quality. Default openai/gpt-4o for fast response within 8s; override with OPENROUTER_MODEL_CONCLUSION. */
+/** Conclusion: aim ~3s. Default gpt-4o (best quality among models that often respond in ~3s); override with OPENROUTER_MODEL_CONCLUSION. */
 const OPENROUTER_MODEL_CONCLUSION = (process.env.OPENROUTER_MODEL_CONCLUSION || "").trim() || "openai/gpt-4o";
 
 console.log("[MODEL]", OPENROUTER_MODEL, OPENROUTER_MODEL_CONCLUSION !== OPENROUTER_MODEL ? "(conclusion: " + OPENROUTER_MODEL_CONCLUSION + ")" : "", "(tier: cheap=" + OPENROUTER_MODEL_CHEAP + " mid=" + OPENROUTER_MODEL_MID + " expensive=" + OPENROUTER_MODEL_EXPENSIVE + ")");
@@ -858,29 +858,14 @@ app.get("/api/stream", async (req, res) => {
   }
 });
 
-const CONCLUSION_MAX_TURNS = 25;
-const CONCLUSION_MAX_CHARS_PER_TURN = 250;
-/** User-accepted max wait 8s: fail fast so UI can show retry; keep request timeout slightly under. */
-const CONCLUSION_TIMEOUT_MS = 8000;
-const CONCLUSION_REQUEST_TIMEOUT_MS = 7500;
+/** Conclusion: hope for ~3s; do not abort early — keep loading until response or long timeout (60s). */
+const CONCLUSION_TIMEOUT_MS = 60000;
+const CONCLUSION_REQUEST_TIMEOUT_MS = 55000;
 
-/** POST /api/conclusion — Single-call high-quality report. */
+/** POST /api/conclusion — Topic-only deep analysis (no transcript). Single-call, good model for quality. */
 app.post("/api/conclusion", async (req, res) => {
   res.setHeader("Content-Type", "application/json");
   const motion = (req.body?.motion || "").toString().trim();
-  let rawTurns = Array.isArray(req.body?.turns) ? req.body.turns : [];
-  if (rawTurns.length > CONCLUSION_MAX_TURNS) {
-    rawTurns = rawTurns.slice(-CONCLUSION_MAX_TURNS);
-  }
-  const turns = rawTurns.map((t, i) => {
-    const text = (t.text != null ? String(t.text) : "").slice(0, CONCLUSION_MAX_CHARS_PER_TURN);
-    return {
-      speakerLabel: (t.speakerLabel != null ? String(t.speakerLabel) : "").slice(0, 80),
-      text,
-      side: (t.side != null ? String(t.side) : "").slice(0, 20),
-      turnIndex: typeof t.turnIndex === "number" ? t.turnIndex : i + 1
-    };
-  });
 
   if (!motion) {
     return res.status(400).json({ ok: false, error: { code: 400, message: "Missing motion" } });
@@ -901,7 +886,7 @@ app.post("/api/conclusion", async (req, res) => {
 
   try {
     const json = await Promise.race([
-      generateConclusion({ topic: motion, turns, fetchOpenRouter, model: OPENROUTER_MODEL_CONCLUSION }),
+      generateConclusion({ topic: motion, fetchOpenRouter, model: OPENROUTER_MODEL_CONCLUSION }),
       timeoutPromise
     ]);
     return res.json(json);
@@ -910,7 +895,7 @@ app.post("/api/conclusion", async (req, res) => {
     const isTimeout = err?.name === "AbortError" || /timeout|aborted/i.test(String(err?.message || ""));
     const message = isTimeout ? "Conclusion timed out" : (err?.message || "Conclusion failed");
     const hint = isTimeout
-      ? " Conclusion is capped at 8s. Set OPENROUTER_MODEL_CONCLUSION to a fast model (e.g. anthropic/claude-sonnet-4) or retry."
+      ? " Conclusion request timed out. Try again or use a faster model in OPENROUTER_MODEL_CONCLUSION."
       : " Check OPENROUTER_API_KEY and OPENROUTER_MODEL in .env.";
     return res.status(200).json({
       ok: false,

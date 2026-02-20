@@ -1,61 +1,39 @@
 /**
- * Conclusion: single-call, high-quality report.
- * Output: systematic analysis, concise argument map, literature with links, media (books/films/music/games).
+ * Conclusion: topic-only deep analysis (no transcript).
+ * One LLM call: systematic breakdown, argument map, literature with links, media (books/films/music/games).
+ * Optimized for speed: single request, concise but substantive; use a good model for quality.
  */
 
-const CONCLUSION_SYSTEM = `You are a debate analyst. Output a single JSON report. Be very concise for speed.
-1. Definitions + argument map (short nodes).
-2. Core clashes, assumptions, steelman (1–2 items each).
-3. Verdict (winner + 1–2 reasoning lines).
-4. Literature: 0–2 items with url if possible. Media: 0–1 item. Omit if none fit.
-Output ONLY valid JSON. No markdown, no commentary.`;
+const CONCLUSION_SYSTEM = `You are a debate and policy analyst. Given ONLY a motion (debate topic), produce a comprehensive, standalone analysis. Do NOT use or reference any transcript or prior dialogue. Analyze the motion itself: definitions, conceptual argument map, key clashes, assumptions, steelman, novel angles, empirical questions, and your analytical verdict. Then cite related literature (with URLs when possible) and recommend media that deepen thinking: books, films, music, games (include any that genuinely fit). Be substantive and thought-provoking; keep structure clear and output valid JSON only. No markdown, no commentary outside the JSON.`;
 
-const SCHEMA_DESC = `JSON schema (output this structure; 1–2 items per section for speed):
+const SCHEMA_DESC = `Output this JSON structure (all fields as specified; omit optional fields if empty):
 {
-  "title": "string",
-  "topic": "string",
+  "title": "string (short, analytic title for the motion)",
+  "topic": "string (echo the motion)",
   "sections": [
-    { "id": "definitions", "heading": "Motion & Definitions", "items": [ { "text": "string", "turnRefs": [number] } ] },
-    { "id": "argument_map", "heading": "Argument Map", "items": [ { "node": "string", "side": "Affirmative|Negative", "supports": ["string"], "attacks": ["string"], "turnRefs": [number] } ] },
-    { "id": "core_clashes", "heading": "Core Clashes", "items": [ { "clash": "string", "aff": "string", "neg": "string", "turnRefs": [number] } ] },
-    { "id": "assumptions", "heading": "Hidden Assumptions", "items": [ { "who": "string", "text": "string", "turnRefs": [number] } ] },
-    { "id": "steelman", "heading": "Steelman & Best Reply", "items": [ { "targetSide": "string", "steelman": "string", "bestReply": "string", "turnRefs": [number] } ] },
-    { "id": "novel_angles", "heading": "New Angles", "items": [ { "angle": "string", "whyItMatters": "string" } ] },
+    { "id": "definitions", "heading": "Motion & Definitions", "items": [ { "text": "string" } ] },
+    { "id": "argument_map", "heading": "Argument Map", "items": [ { "node": "string", "side": "Affirmative|Negative", "supports": ["string"], "attacks": ["string"] } ] },
+    { "id": "core_clashes", "heading": "Core Clashes", "items": [ { "clash": "string", "aff": "string", "neg": "string" } ] },
+    { "id": "assumptions", "heading": "Hidden Assumptions", "items": [ { "who": "string", "text": "string" } ] },
+    { "id": "steelman", "heading": "Steelman & Best Reply", "items": [ { "targetSide": "string", "steelman": "string", "bestReply": "string" } ] },
+    { "id": "novel_angles", "heading": "Novel Angles", "items": [ { "angle": "string", "whyItMatters": "string" } ] },
     { "id": "empirical", "heading": "Empirical Checks", "items": [ { "question": "string", "whatWouldChangeYourMind": "string" } ] },
-    { "id": "verdict", "heading": "Verdict", "items": [ { "winner": "Affirmative|Negative|Tie", "reasoning": ["string"], "keyTurnRefs": [number] } ] },
+    { "id": "verdict", "heading": "Analytical Verdict", "items": [ { "winner": "Affirmative|Negative|Tie", "reasoning": ["string"] } ] },
     { "id": "literature", "heading": "Related Literature", "items": [ { "title": "string", "authors": ["string"], "year": number|null, "url": "string", "relevance": "string" } ] },
-    { "id": "media", "heading": "Further Thinking", "items": [ { "kind": "string", "title": "string", "creator": "string", "year": number|null, "whyRelevant": "string", "spoilerFree": true|false } ] }
+    { "id": "media", "heading": "Further Thinking", "items": [ { "kind": "Book|Film|Music|Game", "title": "string", "creator": "string", "year": number|null, "url": "string", "whyRelevant": "string", "spoilerFree": true|false } ] }
   ]
 }
-Rules: Max 2 items per section. argument_map: 2–3 nodes. literature: 0–2, media: 0–1. turnRefs optional.`;
+Rules: argument_map 2–4 nodes, concise. literature: 1–3 items with url when possible. media: 1–4 items across books, films, music, games as relevant. Output ONLY valid JSON.`;
 
-/** Build user prompt: topic + transcript (trimmed for speed; smaller = faster API response). */
-const CONCLUSION_MAX_TURNS_IN_PROMPT = 15;
-const CONCLUSION_CHARS_PER_TURN = 200;
+function buildConclusionPrompt(topic) {
+  const t = (topic || "").trim().slice(0, 500);
+  return `Motion to analyze (standalone; no transcript):
 
-function buildConclusionPrompt(topic, turns) {
-  const trimmed = turns.length > CONCLUSION_MAX_TURNS_IN_PROMPT
-    ? turns.slice(-CONCLUSION_MAX_TURNS_IN_PROMPT)
-    : turns;
-  const turnsText =
-    trimmed.length === 0
-      ? "(No transcript. Analyze motion only: definitions, argument map, verdict.)"
-      : trimmed
-          .map(
-            (t, i) =>
-              `[${t.turnIndex != null ? t.turnIndex : i + 1}] ${(t.speakerLabel || "").slice(0, 20)} (${(t.side || "").slice(0, 8)}): ${(t.text || "").slice(0, CONCLUSION_CHARS_PER_TURN)}`
-          )
-          .join("\n");
+"${t}"
 
-  return `Motion: ${topic.slice(0, 300)}
-
-Transcript:
-${turnsText}
-
-Output the conclusion JSON per schema. Be concise.`;
+Produce the conclusion JSON per schema. Be comprehensive but concise. Literature and media: include real titles with URLs where possible.`;
 }
 
-/** Normalize and fill sections so frontend always has a consistent shape. */
 const SECTION_IDS = [
   "definitions",
   "argument_map",
@@ -77,9 +55,7 @@ function normalizeConclusion(json, topic) {
     const sec = byId.get(id);
     const heading =
       sec?.heading ||
-      id
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase());
+      id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     return {
       id,
       heading,
@@ -88,7 +64,7 @@ function normalizeConclusion(json, topic) {
   });
 
   return {
-    title: typeof json.title === "string" ? json.title : "Conclusion",
+    title: typeof json.title === "string" ? json.title : "Topic Analysis",
     topic: typeof json.topic === "string" ? json.topic : topic,
     meta: json.meta || {},
     sections: outSections
@@ -96,16 +72,16 @@ function normalizeConclusion(json, topic) {
 }
 
 /**
- * Generate conclusion with one LLM call. Uses high token count for quality.
- * @param {{ topic: string, turns: Array, fetchOpenRouter: (body)=>Promise<{ok, data?, message?}>, model?: string }} opts
+ * Generate topic-only conclusion. Turns are ignored (analysis is standalone).
+ * @param {{ topic: string, turns?: Array, fetchOpenRouter: (body)=>Promise<{ok, data?, message?}>, model?: string }} opts
  * @returns {Promise<{ title, topic, meta, sections }>}
  */
-export async function generateConclusion({ topic, turns, fetchOpenRouter, model }) {
+export async function generateConclusion({ topic, fetchOpenRouter, model }) {
   const generatedAt = new Date().toISOString();
-  const user = buildConclusionPrompt(topic, turns);
+  const user = buildConclusionPrompt(topic);
 
   const res = await fetchOpenRouter({
-    max_tokens: 1000,
+    max_tokens: 1400,
     messages: [
       { role: "system", content: CONCLUSION_SYSTEM + "\n\n" + SCHEMA_DESC },
       { role: "user", content: user }
@@ -132,8 +108,7 @@ export async function generateConclusion({ topic, turns, fetchOpenRouter, model 
   out.meta = {
     ...out.meta,
     model: res.modelUsed || model || "unknown",
-    generatedAt,
-    transcriptTurnCount: turns.length
+    generatedAt
   };
   return out;
 }

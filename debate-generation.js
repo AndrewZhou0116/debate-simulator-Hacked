@@ -237,6 +237,8 @@ function detectSideFlip(speakerId, text) {
   if (isPro) {
     if (/\b(oppose|against|reject)\s+(the\s+)?motion\b/.test(t)) return true;
     if (/\bthe\s+motion\s+is\s+(wrong|flawed|harmful|bad)\b/.test(t)) return true;
+    if (/\b(we're|we are|i'm|i am)\s+against\b/.test(t)) return true;
+    if (/\bwe're\s+opposed\b|\bwe\s+oppose\b/.test(t)) return true;
   } else {
     if (/\b(support|in favor of|adopt)\s+(the\s+)?motion\b/.test(t)) return true;
     if (/\bthe\s+motion\s+is\s+(right|good|necessary)\b/.test(t)) return true;
