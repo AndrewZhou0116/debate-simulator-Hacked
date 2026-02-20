@@ -46,23 +46,28 @@ function countSentences(text) {
  * Cheap heuristic: should we consider an AI objection for this excerpt?
  * Returns { shouldObject: boolean, objectionType?: "hearsay"|"relevance"|"assumption" }.
  * Caller should still gate by heatLevel, roleSubType, and per-side tokens.
+ * Broadened triggers so objections fire more often in real debate text.
  */
 export function getAIObjectionCandidate(excerpt) {
   if (!excerpt || typeof excerpt !== "string") return { shouldObject: false };
   const t = excerpt.trim();
   if (t.length < 20) return { shouldObject: false };
   const lower = t.toLowerCase();
-  // Hearsay: numbers/%, "studies show", unattributed claims
-  if (/\d+%|\b(studies|research|data)\s+show(s)?\b|according to (?!the motion)/i.test(lower)) {
+  // Hearsay: numbers/%, "studies show", unattributed claims, "experts say", "many believe"
+  if (/\d+%|\b(studies|research|data|evidence)\s+show(s)?\b|according to (?!the motion)|\b(experts|many people|scholars)\s+(say|believe|argue)|it is (well )?known that/i.test(lower)) {
     return { shouldObject: true, objectionType: "hearsay" };
   }
-  // Assumption: "obviously", "clearly", "everyone knows" without support in same sentence
-  if (/\b(obviously|clearly|everyone knows|it's (clear|obvious)|of course)\b/i.test(lower) && !/\b(because|since|as|evidence|data|show)\b/i.test(lower)) {
+  // Assumption: "obviously", "clearly", "everyone knows", "we all know", "of course" without support
+  if (/\b(obviously|clearly|everyone knows|we all know|it's (clear|obvious)|of course|without (a )?doubt|undoubtedly)\b/i.test(lower) && !/\b(because|since|as|evidence|data|show|proof)\b/i.test(lower)) {
     return { shouldObject: true, objectionType: "assumption" };
   }
-  // Relevance: strong topic-drift cues (generic; motion not in excerpt)
+  // Relevance: topic-drift or generic filler
   if (/\b(anyway|moving on|that (reminds me|brings me)|off (topic|point)|besides the point)\b/i.test(lower)) {
     return { shouldObject: true, objectionType: "relevance" };
+  }
+  // Broader: unsubstantiated "everyone" / "no one" / "always" / "never" (common in debate)
+  if (/\b(everyone|no one|nobody|everybody)\s+(knows|agrees|believes|thinks)\b/i.test(lower) && !/\b(because|since|study|data|evidence)\b/i.test(lower)) {
+    return { shouldObject: true, objectionType: "assumption" };
   }
   return { shouldObject: false };
 }

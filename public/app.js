@@ -225,13 +225,13 @@
     userSpeechTranscript = "";
     if (yourTurnTranscript) yourTurnTranscript.textContent = "(listening...)";
     voiceInputBtn.classList.add("recording");
-    voiceInputBtn.textContent = "Stop voice input";
+    voiceInputBtn.textContent = "Stop";
     isRecording = true;
     try { recognition.start(); } catch (e) {
       console.warn("Speech recognition start failed", e);
       isRecording = false;
       voiceInputBtn.classList.remove("recording");
-      voiceInputBtn.textContent = "Start voice input";
+      voiceInputBtn.textContent = "Voice";
     }
   });
 
@@ -564,12 +564,55 @@
       return;
     }
 
+    if (item.isObjection && !item.objectionDisplayDone) {
+      const side = sideFromSpeakerId(item.speakerId);
+      appendTranscriptLine(
+        item.speakerId,
+        item.speakerLabel || "",
+        "debater",
+        side,
+        item.text || "",
+        "objection",
+        { objectionType: item.objectionType, raisedBy: item.raisedBy, justification: item.justification }
+      );
+      showObjectionBurst();
+      item.objectionDisplayDone = true;
+      speakQueue.unshift(item);
+      setTimeout(playNextSpeech, OBJECTION_TTS_DELAY_MS);
+      return;
+    }
+
+    if (item.isRuling && !item.rulingDisplayDone) {
+      appendTranscriptLine(
+        "chair",
+        item.speakerLabel || getDisplayName("chair", "Chair"),
+        "chair",
+        "chair",
+        item.text || "",
+        "ruling",
+        { ruling: item.ruling, reason: item.reason, penalty: item.penalty }
+      );
+      if (item.ruling === "SUSTAINED") showSustainedBurst(); else showOverruledBurst();
+      item.rulingDisplayDone = true;
+      speakQueue.unshift(item);
+      setTimeout(playNextSpeech, OBJECTION_TTS_DELAY_MS);
+      return;
+    }
+
     const text = sanitizeClientText(item.text || "");
     const side = sideFromSpeakerId(item.speakerId);
 
     const speechMeta = item.isCorrection ? { isCorrection: true } : undefined;
     if (!("speechSynthesis" in window)) {
-      appendTranscriptLine(item.speakerId, item.speakerLabel || "", item.roleType || "debater", side, text, "speech", speechMeta);
+      if (item.isObjection) {
+        appendTranscriptLine(item.speakerId, item.speakerLabel || "", "debater", side, text, "objection", { objectionType: item.objectionType, raisedBy: item.raisedBy, justification: item.justification });
+        showObjectionBurst();
+      } else if (item.isRuling) {
+        appendTranscriptLine("chair", item.speakerLabel || "", "chair", "chair", text, "ruling", { ruling: item.ruling, reason: item.reason, penalty: item.penalty });
+        if (item.ruling === "SUSTAINED") showSustainedBurst(); else showOverruledBurst();
+      } else {
+        appendTranscriptLine(item.speakerId, item.speakerLabel || "", item.roleType || "debater", side, text, "speech", speechMeta);
+      }
       updateCurrentSpeechBar(getDisplayName(item.speakerId, item.speakerLabel), item.roleType || "debater", side, text);
       clearCurrentSpeechBar();
       sitDown(item.speakerId);
@@ -585,20 +628,27 @@
     typewriterAborted = false;
     isSpeaking = true;
     standUp(item.speakerId);
-    // Show full text in current-speech bar so it stays in sync with TTS (no typewriter there)
-    updateCurrentSpeechBar(getDisplayName(item.speakerId, item.speakerLabel), item.roleType || "debater", side, text);
-
     clearCurrentSpeakerHighlight();
-    const textSpan = createTranscriptLine(getDisplayName(item.speakerId, item.speakerLabel), item.roleType || "debater", side, item.speakerId, true, "speech", speechMeta);
-    transcriptTurnsForConclusion.push({
-      speakerId: item.speakerId || undefined,
-      speakerLabel: getDisplayName(item.speakerId, item.speakerLabel),
-      text: text || "",
-      side: side || sideFromSpeakerId(item.speakerId),
-      turnIndex: transcriptTurnsForConclusion.length + 1,
-      type: "speech",
-      meta: speechMeta || undefined
-    });
+    /** Show text and start typewriter when audio actually starts (sync text with voice). */
+    function showTextWhenAudioStarts() {
+      updateCurrentSpeechBar(getDisplayName(item.speakerId, item.speakerLabel), item.roleType || "debater", side, text);
+      let span = null;
+      if (!item.isObjection && !item.isRuling) {
+        span = createTranscriptLine(getDisplayName(item.speakerId, item.speakerLabel), item.roleType || "debater", side, item.speakerId, true, "speech", speechMeta);
+        transcriptTurnsForConclusion.push({
+          speakerId: item.speakerId || undefined,
+          speakerLabel: getDisplayName(item.speakerId, item.speakerLabel),
+          text: text || "",
+          side: side || sideFromSpeakerId(item.speakerId),
+          turnIndex: transcriptTurnsForConclusion.length + 1,
+          type: "speech",
+          meta: speechMeta || undefined
+        });
+      }
+      if (!item.isObjection && !item.isRuling) {
+        runTypewriter(span || document.createElement("span"), text, typewriterDurationMs, () => onUtteranceDone(), currentSpeechText);
+      }
+    }
     const { voice, rate, pitch, volume } = VOICE_MANAGER.pick(item.speakerId, item.roleType);
     const textForSpeech = stripEmojiForSpeech(text) || " ";
     const speakRate = 0.95;
@@ -636,7 +686,10 @@
       else playNextSpeech();
     }
 
-    utter.onstart = () => ttsLog("onstart", { speakerId: item.speakerId });
+    utter.onstart = () => {
+      ttsLog("onstart", { speakerId: item.speakerId });
+      showTextWhenAudioStarts();
+    };
     utter.onend = () => {
       ttsLog("onend", { speakerId: item.speakerId, queueLength: speakQueue.length });
       onUtteranceDone();
@@ -660,9 +713,6 @@
       else playNextSpeech();
     }, maxWaitMs);
 
-    // Typewriter only for transcript line; current-speech bar already shows full text for TTS sync
-    runTypewriter(textSpan || document.createElement("span"), text, typewriterDurationMs, () => onUtteranceDone(), null);
-
     function fallbackSpeak() {
       try { window.speechSynthesis.resume(); } catch (e) {}
       window.speechSynthesis.speak(utter);
@@ -684,6 +734,7 @@
               const audio = new Audio(URL.createObjectURL(new Blob([buf])));
               audio.onended = () => onUtteranceDone();
               audio.onerror = () => fallbackSpeak();
+              audio.onplaying = () => showTextWhenAudioStarts();
               audio.play().catch(() => fallbackSpeak());
             });
           }
@@ -785,31 +836,29 @@
     rec.onend = () => {
       if (voiceInputBtn) {
         voiceInputBtn.classList.remove("recording");
-        voiceInputBtn.textContent = "Start voice input";
+        voiceInputBtn.textContent = "Voice";
       }
       isRecording = false;
     };
     rec.onerror = () => {
       if (voiceInputBtn) {
         voiceInputBtn.classList.remove("recording");
-        voiceInputBtn.textContent = "Start voice input";
+        voiceInputBtn.textContent = "Voice";
       }
       isRecording = false;
     };
     return rec;
   }
 
-  function showYourTurnPopup(segmentId) {
+  function showYourTurnPopup(segmentId, focusInput) {
     currentYourTurnSegmentId = segmentId;
     userSpeechTranscript = "";
     if (yourTurnTranscript) yourTurnTranscript.textContent = "";
     if (yourTurnTextInput) yourTurnTextInput.value = "";
-    if (yourTurnPopup) {
-      yourTurnPopup.hidden = false;
-    }
-    if (voiceInputBtn) voiceInputBtn.textContent = "Start voice input";
+    if (yourTurnPopup) yourTurnPopup.hidden = false;
+    if (voiceInputBtn) voiceInputBtn.textContent = "Voice";
     if (endSpeakBtn) endSpeakBtn.disabled = false;
-    yourTurnTextInput && yourTurnTextInput.focus();
+    if (focusInput && yourTurnTextInput) yourTurnTextInput.focus();
   }
 
   function hideYourTurnPopup() {
@@ -874,9 +923,9 @@
         showToast("Generation error (" + code + "). Check server .env key.");
         startBtn.disabled = false;
         hideYourTurnPopup();
-      } else if (data.type === "your_turn") {
+      } else if (data.type === "your_turn_soon" || data.type === "your_turn") {
         if (data.segmentId != null) currentSegmentId = data.segmentId;
-        showYourTurnPopup(data.segmentId);
+        showYourTurnPopup(data.segmentId, data.type === "your_turn");
       } else if (data.type === "speech") {
         showPreparingState(false);
         if (data.speakerId != null) currentSpeakerId = data.speakerId;
@@ -888,36 +937,57 @@
         const side = (data.speakerId ? sideFromSpeakerId(data.speakerId) : null) || (data.side === "con" || data.side === "pro" ? data.side : "pro");
         const label = data.speakerLabel || getDisplayName(data.speakerId, "");
         const text = (data.justification || "Objection.").trim();
-        appendTranscriptLine(
-          data.speakerId || "pro1",
-          label,
-          "debater",
-          side,
-          text,
-          "objection",
-          { objectionType: data.objectionType, raisedBy: data.raisedBy, justification: data.justification }
-        );
+        if (getVoiceMode() && text) {
+          enqueueSpeech({
+            speakerId: data.speakerId || "pro1",
+            speakerLabel: label,
+            roleType: "debater",
+            segmentId: data.segmentId ?? null,
+            text: text,
+            isObjection: true,
+            objectionType: data.objectionType,
+            raisedBy: data.raisedBy,
+            justification: data.justification
+          });
+        } else {
+          appendTranscriptLine(
+            data.speakerId || "pro1",
+            label,
+            "debater",
+            side,
+            text,
+            "objection",
+            { objectionType: data.objectionType, raisedBy: data.raisedBy, justification: data.justification }
+          );
+          showObjectionBurst();
+        }
       } else if (data.type === "ruling") {
         if (data.segmentId != null) currentSegmentId = data.segmentId;
         const label = data.speakerLabel || getDisplayName("chair", "Chair");
         const rulingText = (data.text || [data.ruling, data.reason].filter(Boolean).join(". ")).trim();
-        appendTranscriptLine(
-          "chair",
-          label,
-          "chair",
-          "chair",
-          rulingText,
-          "ruling",
-          { ruling: data.ruling, reason: data.reason, penalty: data.penalty }
-        );
         if (getVoiceMode() && rulingText) {
           enqueueSpeech({
             speakerId: "chair",
             speakerLabel: label,
             roleType: "chair",
             segmentId: data.segmentId ?? null,
-            text: rulingText
+            text: rulingText,
+            isRuling: true,
+            ruling: data.ruling,
+            reason: data.reason,
+            penalty: data.penalty
           });
+        } else {
+          appendTranscriptLine(
+            "chair",
+            label,
+            "chair",
+            "chair",
+            rulingText,
+            "ruling",
+            { ruling: data.ruling, reason: data.reason, penalty: data.penalty }
+          );
+          if (data.ruling === "SUSTAINED") showSustainedBurst(); else showOverruledBurst();
         }
       } else if (data.type === "clarification") {
         if (data.segmentId != null) currentSegmentId = data.segmentId;
@@ -1006,6 +1076,88 @@
     }
   }
 
+  const RONPA_INTRO_DURATION_MS = 2150;
+
+  function runRonpaIntroThenStart(topic) {
+    const overlay = document.getElementById("ronpaIntro");
+    const imgEl = document.getElementById("ronpaIntroImage");
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!overlay || !imgEl || prefersReducedMotion) {
+      unlockSpeechThenConnect(topic);
+      return;
+    }
+    loadImageChromaKey("assets/ronpa-intro.png", (dataUrl) => {
+      imgEl.src = dataUrl;
+      overlay.hidden = false;
+      overlay.setAttribute("aria-hidden", "false");
+      overlay.setAttribute("data-active", "true");
+      setTimeout(() => {
+        overlay.setAttribute("data-active", "false");
+        setTimeout(() => {
+          overlay.hidden = true;
+          overlay.setAttribute("aria-hidden", "true");
+          unlockSpeechThenConnect(topic);
+        }, 380);
+      }, RONPA_INTRO_DURATION_MS);
+    }, () => {
+      unlockSpeechThenConnect(topic);
+    });
+  }
+
+  const OBJECTION_BURST_DURATION_MS = 1750;
+  /** Delay before TTS speaks the objection line so icon is visible first (fallback: icon then dialogue). */
+  const OBJECTION_TTS_DELAY_MS = 550;
+  let objectionBurstShownAt = null;
+
+  function showObjectionBurst() {
+    const overlay = document.getElementById("objectionIntro");
+    const imgEl = document.getElementById("objectionIntroImage");
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!overlay || !imgEl || prefersReducedMotion) return;
+    objectionBurstShownAt = Date.now();
+    loadImageChromaKey("assets/objection-intro.png", (dataUrl) => {
+      imgEl.src = dataUrl;
+      overlay.hidden = false;
+      overlay.setAttribute("aria-hidden", "false");
+      overlay.setAttribute("data-active", "true");
+      setTimeout(() => {
+        overlay.setAttribute("data-active", "false");
+        setTimeout(() => {
+          overlay.hidden = true;
+          overlay.setAttribute("aria-hidden", "true");
+        }, 300);
+      }, OBJECTION_BURST_DURATION_MS);
+    });
+  }
+
+  function showRulingBurst(imageId, overlayId, assetPath) {
+    const overlay = document.getElementById(overlayId);
+    const imgEl = document.getElementById(imageId);
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!overlay || !imgEl || prefersReducedMotion) return;
+    loadImageChromaKey(assetPath, (dataUrl) => {
+      imgEl.src = dataUrl;
+      overlay.hidden = false;
+      overlay.setAttribute("aria-hidden", "false");
+      overlay.setAttribute("data-active", "true");
+      setTimeout(() => {
+        overlay.setAttribute("data-active", "false");
+        setTimeout(() => {
+          overlay.hidden = true;
+          overlay.setAttribute("aria-hidden", "true");
+        }, 300);
+      }, OBJECTION_BURST_DURATION_MS);
+    });
+  }
+
+  function showSustainedBurst() {
+    showRulingBurst("sustainedIntroImage", "sustainedIntro", "assets/sustained-intro.png");
+  }
+
+  function showOverruledBurst() {
+    showRulingBurst("overruledIntroImage", "overruledIntro", "assets/overruled-intro.png");
+  }
+
   function onStart() {
     const topic = (topicInput.value || "").trim();
     if (!topic) {
@@ -1031,7 +1183,7 @@
       body: JSON.stringify({ topic })
     }).catch((e) => console.warn("Failed /api/start", e));
 
-    unlockSpeechThenConnect(topic);
+    runRonpaIntroThenStart(topic);
   }
 
   function onStopReset() {

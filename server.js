@@ -66,6 +66,8 @@ const PORT = process.env.PORT || 3000;
 /** @type {Map<string, { segmentId: string, resolve: (text: string) => void }>} */
 const pendingUserSpeeches = new Map();
 const USER_SPEECH_TIMEOUT_MS = 120000;
+/** Show "your turn" popup this many ms before actually asking for input (user has time to get ready). */
+const USER_TURN_POPUP_BEFORE_MS = 2000;
 
 /** Per-stream session for AI objection state (debater vs debater). */
 const streamSessions = new Map();
@@ -643,6 +645,15 @@ app.get("/api/stream", async (req, res) => {
 
       if (slot && segment.speakerId === slot && segment.roleType === "debater") {
         sendEvent({
+          type: "your_turn_soon",
+          speakerId: segment.speakerId,
+          speakerLabel: segment.label,
+          segmentId: segment.id,
+          roleType: segment.roleType,
+          roleSubType: segment.roleSubType
+        });
+        await new Promise((r) => setTimeout(r, USER_TURN_POPUP_BEFORE_MS));
+        sendEvent({
           type: "your_turn",
           speakerId: segment.speakerId,
           speakerLabel: segment.label,
@@ -761,7 +772,12 @@ app.get("/api/stream", async (req, res) => {
           const aiTokens = opponentSide === "PRO" ? sess.aiObjectionTokensPro : sess.aiObjectionTokensCon;
           if (aiTokens > 0) {
             const excerpt = (sess.emittedSentencesInSegment || []).slice(-4).join(" ").trim();
-            const candidate = getAIObjectionCandidate(excerpt);
+            let candidate = getAIObjectionCandidate(excerpt);
+            // Fallback: if no keyword match but we have enough text (2+ sentences), trigger with probability so objections occur in most debates
+            if (!candidate.shouldObject && excerpt.length >= 40 && Math.random() < 0.22) {
+              const types = ["hearsay", "assumption", "relevance"];
+              candidate = { shouldObject: true, objectionType: types[Math.floor(Math.random() * types.length)] };
+            }
             if (candidate.shouldObject && candidate.objectionType) {
               const objectorId =
                 opponentSide === "PRO"

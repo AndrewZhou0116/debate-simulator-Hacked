@@ -7,6 +7,36 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <!-- Ronpa intro overlay: shows 論破! then fades out (Ace Attorney style) -->
+    <div id="ronpaIntro" class="ronpa-intro" aria-hidden="true" hidden>
+      <div class="ronpa-intro-backdrop"></div>
+      <div class="ronpa-intro-graphic-wrap">
+        <img id="ronpaIntroImage" class="ronpa-intro-graphic" src="assets/ronpa-intro.png" alt="論破！" />
+      </div>
+    </div>
+
+    <!-- Objection! overlay: same burst style when a debater objects -->
+    <div id="objectionIntro" class="objection-intro" aria-hidden="true" hidden>
+      <div class="objection-intro-backdrop"></div>
+      <div class="objection-intro-graphic-wrap">
+        <img id="objectionIntroImage" class="objection-intro-graphic" src="assets/objection-intro.png" alt="Objection!" />
+      </div>
+    </div>
+
+    <!-- Sustained! / Overruled! overlays: same burst when chair rules -->
+    <div id="sustainedIntro" class="ruling-intro ruling-intro--sustained" aria-hidden="true" hidden>
+      <div class="ruling-intro-backdrop"></div>
+      <div class="ruling-intro-graphic-wrap">
+        <img id="sustainedIntroImage" class="ruling-intro-graphic" src="assets/sustained-intro.png" alt="Sustained!" />
+      </div>
+    </div>
+    <div id="overruledIntro" class="ruling-intro ruling-intro--overruled" aria-hidden="true" hidden>
+      <div class="ruling-intro-backdrop"></div>
+      <div class="ruling-intro-graphic-wrap">
+        <img id="overruledIntroImage" class="ruling-intro-graphic" src="assets/overruled-intro.png" alt="Overruled!" />
+      </div>
+    </div>
+
     <div class="page">
       <header class="top-bar">
         <div class="topic-input-group">
@@ -41,19 +71,15 @@
         </div>
       </header>
 
-      <!-- Bottom popup when it's user's turn: type or use voice -->
+      <!-- Your turn: pops up 2s before slot; type or voice, then submit -->
       <div id="yourTurnPopup" class="your-turn-popup" hidden>
         <div class="your-turn-content">
-          <p class="your-turn-title">It's your turn</p>
-          <label for="yourTurnTextInput" class="your-turn-label">Type or use voice below</label>
-          <textarea id="yourTurnTextInput" class="your-turn-text-input" placeholder="Type your response here…" rows="3"></textarea>
-          <div class="your-turn-voice-row">
-            <span class="your-turn-voice-label">Voice input:</span>
-            <div class="your-turn-transcript" id="yourTurnTranscript" aria-live="polite"></div>
-          </div>
+          <p class="your-turn-title">Your turn</p>
+          <textarea id="yourTurnTextInput" class="your-turn-text-input" placeholder="Type or speak…" rows="2"></textarea>
+          <div class="your-turn-transcript" id="yourTurnTranscript" aria-live="polite"></div>
           <div class="your-turn-actions">
-            <button type="button" id="voiceInputBtn" class="btn-voice">Start voice input</button>
-            <button type="button" id="endSpeakBtn" class="btn-end">Submit</button>
+            <button type="button" id="voiceInputBtn" class="your-turn-btn your-turn-btn--voice">Voice</button>
+            <button type="button" id="endSpeakBtn" class="your-turn-btn your-turn-btn--submit">Submit</button>
           </div>
         </div>
       </div>
