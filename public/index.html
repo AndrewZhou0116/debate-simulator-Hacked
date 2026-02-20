@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Real-time Debate Simulator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="top-bar">
+        <div class="topic-input-group">
+          <label for="topicInput">Topic:</label>
+          <input
+            id="topicInput"
+            type="text"
+            placeholder="Enter a debate topic"
+          />
+        </div>
+        <div class="slot-selector" aria-label="Join as debater">
+          <span class="slot-label">Join as:</span>
+          <div class="slot-options">
+            <label class="slot-option"><input type="radio" name="userSlot" value="" checked /> None</label>
+            <label class="slot-option"><input type="radio" name="userSlot" value="pro1" /> Pro 1</label>
+            <label class="slot-option"><input type="radio" name="userSlot" value="pro2" /> Pro 2</label>
+            <label class="slot-option"><input type="radio" name="userSlot" value="pro3" /> Pro 3</label>
+            <label class="slot-option"><input type="radio" name="userSlot" value="con1" /> Con 1</label>
+            <label class="slot-option"><input type="radio" name="userSlot" value="con2" /> Con 2</label>
+            <label class="slot-option"><input type="radio" name="userSlot" value="con3" /> Con 3</label>
+          </div>
+        </div>
+        <div class="controls">
+          <label class="voice-mode-toggle" title="When on, TTS plays from queue (slower, guaranteed playback). When off, transcript only (fastest).">
+            <input type="checkbox" id="voiceModeCheckbox" checked="checked" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-label">Voice mode</span>
+          </label>
+          <button id="startBtn">Start</button>
+          <button id="stopBtn">Stop / Reset</button>
+          <button type="button" id="conclusionBtn" title="Generate structured analysis, argument map, literature &amp; media recommendations">Conclusion</button>
+        </div>
+      </header>
+
+      <!-- Bottom popup when it's user's turn: type or use voice -->
+      <div id="yourTurnPopup" class="your-turn-popup" hidden>
+        <div class="your-turn-content">
+          <p class="your-turn-title">It's your turn</p>
+          <label for="yourTurnTextInput" class="your-turn-label">Type or use voice below</label>
+          <textarea id="yourTurnTextInput" class="your-turn-text-input" placeholder="Type your response here…" rows="3"></textarea>
+          <div class="your-turn-voice-row">
+            <span class="your-turn-voice-label">Voice input:</span>
+            <div class="your-turn-transcript" id="yourTurnTranscript" aria-live="polite"></div>
+          </div>
+          <div class="your-turn-actions">
+            <button type="button" id="voiceInputBtn" class="btn-voice">Start voice input</button>
+            <button type="button" id="endSpeakBtn" class="btn-end">Submit</button>
+          </div>
+        </div>
+      </div>
+
+      <main class="main-layout">
+        <div class="stage-hero" id="stageHero">
+          <div class="stage-hero-header">
+            <p class="stage-hero-label">Debate Stage</p>
+            <button type="button" id="stageFullscreenBtn" class="stage-fullscreen-btn" title="Enter fullscreen (immersion mode)" aria-label="Enter fullscreen">
+              <span class="stage-fullscreen-btn-icon" aria-hidden="true"></span>
+              <span class="stage-fullscreen-btn-text">Fullscreen</span>
+            </button>
+          </div>
+          <div class="stage-shell">
+          <section class="stage-container" id="stageContainer">
+            <div class="stage-background" id="stageBackground" aria-hidden="true"></div>
+            <div class="stage-vignette" aria-hidden="true"></div>
+            <div class="stage-foreground-wrap">
+            <svg
+              id="debateStage"
+              class="stage-svg"
+              viewBox="0 0 1700 680"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <defs>
+                <radialGradient id="contactShadowGrad" cx="50%" cy="50%" r="50%" gradientUnits="objectBoundingBox">
+                  <stop offset="0%" stop-color="rgba(0,0,0,0.50)" />
+                  <stop offset="70%" stop-color="transparent" />
+                </radialGradient>
+              </defs>
+              <!-- Contact shadows (floor anchor under desks; elliptical, slightly below) -->
+              <g id="contactShadows" class="stage-contact-shadows">
+                <ellipse id="contactShadowAffirmative" class="contact-shadow" cx="383" cy="566" rx="432" ry="14" fill="url(#contactShadowGrad)" />
+                <ellipse id="contactShadowJudge" class="contact-shadow" cx="850" cy="536" rx="130" ry="14" fill="url(#contactShadowGrad)" />
+                <ellipse id="contactShadowNegative" class="contact-shadow" cx="1342" cy="566" rx="432" ry="14" fill="url(#contactShadowGrad)" />
+              </g>
+              <!-- Foreground: debaters + tables + judge -->
+              <g id="foreground" class="stage-foreground">
+                <rect x="0" y="540" width="1700" height="140" fill="transparent" />
+                <g id="pro1" class="character" transform="translate(223, 438)">
+                  <image id="pro1Image" href="assets/debater_pro1.png" x="-80" y="-420" width="160" height="420" preserveAspectRatio="xMidYMax meet" />
+                </g>
+                <g id="pro2" class="character" transform="translate(373, 438)">
+                  <image id="pro2Image" href="assets/debater_pro2.png" x="-80" y="-420" width="160" height="420" preserveAspectRatio="xMidYMax meet" />
+                </g>
+                <g id="pro3" class="character" transform="translate(523, 438)">
+                  <image id="pro3Image" href="assets/debater_pro3.png" x="-80" y="-420" width="160" height="420" preserveAspectRatio="xMidYMax meet" />
+                </g>
+                <g id="con1" class="character" transform="translate(1175, 439)">
+                  <image id="con1Image" href="assets/debater_con1.png" x="-80" y="-420" width="160" height="420" preserveAspectRatio="xMidYMax meet" />
+                </g>
+                <g id="con2" class="character" transform="translate(1325, 439)">
+                  <image id="con2Image" href="assets/debater_con2.png" x="-80" y="-420" width="160" height="420" preserveAspectRatio="xMidYMax meet" />
+                </g>
+                <g id="con3" class="character" transform="translate(1475, 439)">
+                  <image id="con3Image" href="assets/debater_con3.png" x="-80" y="-420" width="160" height="420" preserveAspectRatio="xMidYMax meet" />
+                </g>
+                <g id="chair" class="character" transform="translate(850, 358)">
+                  <image id="chairImage" href="assets/makima.png" x="-100" y="-400" width="200" height="400" preserveAspectRatio="xMidYMax meet" />
+                </g>
+                <image id="tableAffirmative" href="assets/table-affirmative.png" x="-157" y="125" width="1080" height="600" preserveAspectRatio="xMidYMid meet" />
+                <image id="tableJudge" href="assets/table-judge.png" x="688" y="130" width="324" height="380" preserveAspectRatio="xMidYMid meet" />
+                <image id="tableNegative" href="assets/table-negative.png" x="802" y="126" width="1080" height="600" preserveAspectRatio="xMidYMid meet" />
+              </g>
+            </svg>
+            </div>
+            <div id="currentSpeechBar" class="current-speech-bar" aria-live="polite" hidden>
+              <span id="currentSpeechSpeaker" class="current-speech-speaker"></span>
+              <span id="currentSpeechText" class="current-speech-text"></span>
+            </div>
+          </section>
+          </div>
+        </div>
+
+        <section class="transcript-container">
+          <div class="transcript-header-row">
+            <button type="button" class="transcript-toggle" id="transcriptToggle" aria-expanded="true" aria-controls="transcript" title="Expand or collapse transcript">
+              <span class="transcript-header">Debate Transcript</span>
+              <span class="transcript-toggle-icon" aria-hidden="true"></span>
+            </button>
+            <div class="transcript-controls">
+              <button type="button" id="copyScriptBtn" class="copy-script-btn" title="Copy transcript to clipboard" aria-label="Copy transcript to clipboard"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            </div>
+          </div>
+          <div id="transcript" class="transcript-body" role="region" aria-label="Debate transcript"></div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Conclusion modal -->
+    <div id="conclusionModal" class="conclusion-modal" aria-hidden="true" hidden>
+      <div class="conclusion-backdrop" id="conclusionBackdrop"></div>
+      <div class="conclusion-panel" role="dialog" aria-labelledby="conclusionTitle">
+        <div class="conclusion-panel-header">
+          <h2 id="conclusionTitle" class="conclusion-title">Conclusion</h2>
+          <button type="button" class="conclusion-close" id="conclusionClose" aria-label="Close">&times;</button>
+        </div>
+        <div class="conclusion-content" id="conclusionContent">
+          <!-- Filled by app.js: loading, error, or sections -->
+        </div>
+      </div>
+    </div>
+
+    <script>window.__API_BASE__ = "";</script>
+    <script src="app.js"></script>
+  </body>
+  </html>
