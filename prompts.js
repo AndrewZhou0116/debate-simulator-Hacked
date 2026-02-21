@@ -239,7 +239,7 @@ ${(draft || "").trim()}
 """`;
 }
 
-// ─── Legacy: closure style (kept minimal; PERSONA_OUTPUT_CONSTRAINTS takes precedence) ─ (kept minimal; PERSONA_OUTPUT_CONSTRAINTS takes precedence) ─
+// ─── Legacy: closure style (kept minimal; PERSONA_OUTPUT_CONSTRAINTS takes precedence) ─
 export const CLOSURE_STYLE = {
   pro1: "End with a verdict line or signature closer: 'Say the bargain plainly.' 'That word is your loophole.' 'You want the effect without owning the cost.' 'Fine—then own what follows.' Not a question.",
   pro2: "End with a declarative closure: minimal fix (scope + trigger + override/appeal + audit) or edge-case verdict.",
@@ -694,26 +694,6 @@ Return STRICT JSON only:
   "penalty": { "sentenceCut": 0 | 1, "forceCorrection": true | false }
 }
 No extra keys. No markdown. If OVERRULED: sentenceCut 0, forceCorrection false. If SUSTAINED: sentenceCut 1 and forceCorrection true (speaker will deliver a short clarification).`;
-}
-
-/** Clarification after objection: 1–2 sentences, in-character. SUSTAINED → add definition/verifiable point; OVERRULED → continue advancing (still 1–2 sentences). */
-export const CLARIFICATION_SYSTEM = `You are the speaker who was just objected to. Output ONLY 1–2 short sentences. Stay in character and on your side. No preamble, no "I would like to clarify."`;
-
-export function buildClarificationUserPrompt(topic, speakerLabel, side, objectionType, excerpt, ruling) {
-  const sustained = ruling === "SUSTAINED";
-  const instruction = sustained
-    ? "The objection was SUSTAINED. Add a brief definition or one verifiable point that addresses the defect. Stay in character. 1–2 sentences only."
-    : "The objection was OVERRULED. Briefly continue advancing your argument (1–2 sentences). Stay in character. Do not repeat the objected line.";
-  return `Topic: ${topic}
-Speaker: ${speakerLabel}
-Side: ${side}
-ObjectionType: ${objectionType}
-Ruling: ${ruling}
-Excerpt that was objected to:
-"${(excerpt || "").replace(/"/g, '\\"')}"
-
-${instruction}
-Output ONLY the 1–2 sentence clarification.`;
 }
 
 /** Correction line when ruling is SUSTAINED: speaker delivers one in-character corrective line (≤20 words). */

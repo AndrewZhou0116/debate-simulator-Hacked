@@ -129,12 +129,6 @@ function detectAbstractNounSalad(text) {
   return abstractCount >= 2 && !hasConcretizer;
 }
 
-/** Question-only loop: last N turn texts all end with "?" => next should be closure. Handled in buildPrompt via context.recentTurns. */
-function lastTurnsAllQuestions(recentTurnTexts = [], count = 2) {
-  const last = recentTurnTexts.slice(-count);
-  return last.length >= count && last.every((t) => /\?$/.test((t || "").trim()));
-}
-
 /** Run template/abstract detectors; if flagged, return true so we run rewrite pass. */
 function shouldRunTemplateRewrite(text, segment) {
   if (!text || segment?.roleType === "chair") return false;

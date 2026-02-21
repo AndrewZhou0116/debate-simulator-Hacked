@@ -18,12 +18,7 @@ const BASE_TOKENS = {
 
 /** Map roleSubType to router segment_type and base. */
 function getSegmentTypeAndBase(roleType, roleSubType) {
-  if (roleType === "chair") {
-    if (roleSubType === "openingChair" || roleSubType === "transition" || roleSubType === "reprimand" || roleSubType === "closingChair") {
-      return { segment_type: "chair_procedural", base: 80 };
-    }
-    return { segment_type: "chair_procedural", base: 80 };
-  }
+  if (roleType === "chair") return { segment_type: "chair_procedural", base: 80 };
   if (roleSubType === "interjection") return { segment_type: "interjection", base: 120 };
   if (roleSubType === "pro_statement" || roleSubType === "con_statement") return { segment_type: "opening_statement", base: 220 };
   if (roleSubType === "pro_rebuttal" || roleSubType === "con_rebuttal") return { segment_type: "rebuttal", base: 260 };

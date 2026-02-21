@@ -1,8 +1,8 @@
 {
-  "name": "realtime-debate-simulator",
+  "name": "ronpa",
   "version": "1.0.0",
   "type": "module",
-  "description": "A simple realtime fact debate simulator with SVG stage, TTS, and OpenRouter backend.",
+  "description": "Ronpa — real-time debate simulator with SVG stage, TTS, and OpenRouter backend.",
   "main": "server.js",
   "scripts": {
     "dev": "node server.js",

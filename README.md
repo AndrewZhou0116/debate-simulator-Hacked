@@ -1,4 +1,4 @@
-# Real-time Debate Simulator
+# Ronpa
 
 A real-time fact debate simulator with an SVG stage, text-to-speech, and AI-powered speakers. Enter a topic, start the debate, and watch Pro/Con teams and a chair deliver streamed turns with optional voice playback.
 
@@ -17,7 +17,7 @@ A real-time fact debate simulator with an SVG stage, text-to-speech, and AI-powe
 
 ```bash
 git clone <repo-url>
-cd debate
+cd ronpa
 npm install
 cp .env.example .env
 ```

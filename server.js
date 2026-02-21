@@ -169,7 +169,6 @@ app.get("/api/diag/openrouter", (req, res) => {
     keyLen: OPENROUTER_API_KEY.length,
     keyPrefix: OPENROUTER_API_KEY.slice(0, 8),
     model: OPENROUTER_MODEL,
-    chosenModel: OPENROUTER_MODEL,
     modelFallbacks: OPENROUTER_MODEL_FALLBACKS,
     baseUrl: OPENROUTER_BASE_URL
   });
