@@ -31,11 +31,11 @@
 
   /** Speaker display names for transcript and current-speech bar (name only; role shown separately). */
   const SPEAKER_DISPLAY_NAMES = {
-    chair: "Makima",
-    pro1: "Donald Trump",
-    pro2: "Light Yagami",
+    chair: "Aristotle",
+    pro1: "Lacan",
+    pro2: "Turing",
     pro3: "Immanuel Kant",
-    con1: "Gus Fring",
+    con1: "Marx",
     con2: "Albert Camus",
     con3: "Isaac Newton"
   };
@@ -193,15 +193,15 @@
     applyTableBackgroundRemoval();
     const chairEl = document.getElementById("chairImage");
     if (chairEl) {
-      loadImageChromaKey("assets/makima.png", (dataUrl) => chairEl.setAttribute("href", dataUrl), () => {
+      loadImageChromaKey("assets/aristotle.png", (dataUrl) => chairEl.setAttribute("href", dataUrl), () => {
         chairEl.setAttribute("href", "assets/sketch/judge.svg");
       });
     }
     const debaterSlots = [
-      { id: "pro1", src: "assets/debater_pro1.png", fallback: "assets/sketch/pro1.svg" },
-      { id: "pro2", src: "assets/debater_pro2.png", fallback: "assets/sketch/pro2.svg" },
+      { id: "pro1", src: "assets/lacan.png", fallback: "assets/sketch/pro1.svg" },
+      { id: "pro2", src: "assets/turing.png", fallback: "assets/sketch/pro2.svg" },
       { id: "pro3", src: "assets/debater_pro3.png", fallback: "assets/sketch/pro3.svg" },
-      { id: "con1", src: "assets/debater_con1.png", fallback: "assets/sketch/con1.svg" },
+      { id: "con1", src: "assets/marx.png", fallback: "assets/sketch/con1.svg" },
       { id: "con2", src: "assets/debater_con2.png", fallback: "assets/sketch/con2.svg" },
       { id: "con3", src: "assets/debater_con3.png", fallback: "assets/sketch/con3.svg" }
     ];
@@ -269,7 +269,7 @@
     transcriptEl.querySelectorAll(".transcript-entry--current").forEach((el) => el.classList.remove("transcript-entry--current"));
   }
 
-  /** @param {string} displayName - Full name + label e.g. "Makima (Chair)"
+  /** @param {string} displayName - Full name + label e.g. "Aristotle (Chair)"
    *  @param {string} [speakerId] - e.g. "chair", "pro1", "con2"
    *  @param {boolean} [isCurrent] - whether this entry is the active speaker (highlight)
    *  @param {string} [entryType] - "speech" | "objection" | "ruling"
@@ -347,13 +347,13 @@
   }
 
   /** Preferred voice name substrings per character (browser TTS). Match is case-insensitive.
-   *  Pro1=Trump: deeper/raspy; Pro2=Light: younger male; Pro3=Kant: mature; Con1=Gus: cold; Con2=Camus: thoughtful; Con3=Newton: precise. */
+   *  Chair=Aristotle: measured; Pro1=Lacan: articulate; Pro2=Turing: crisp; Pro3=Kant: mature; Con1=Marx: forceful; Con2=Camus: reflective; Con3=Newton: precise. */
   const SPEAKER_VOICE_PREFERENCES = (typeof window !== "undefined" && window.DEBATE_SPEAKER_VOICE_PREFERENCES) || {
-    chair: ["zira", "samantha", "victoria", "susan", "female", "anna", "melina"],
-    pro1: ["david", "mark", "male"],           // Trump-style: deeper, assertive
-    pro2: ["daniel", "james", "male"],        // Light: younger, calmer
+    chair: ["david", "george", "male"],       // Aristotle: measured, male
+    pro1: ["david", "daniel", "male"],        // Lacan: articulate, precise
+    pro2: ["daniel", "james", "male"],        // Turing: crisp, clear
     pro3: ["george", "male"],                 // Kant: mature, measured
-    con1: ["david", "mark", "male"],          // Gus: cold, authoritative
+    con1: ["david", "mark", "male"],          // Marx: forceful, authoritative
     con2: ["daniel", "james", "male"],        // Camus: reflective
     con3: ["george", "male"]                  // Newton: precise
   };
@@ -397,7 +397,7 @@
       const pool = advanced.length ? advanced : anyEn;
 
       const roleParams = {
-        chair: { rate: 1.12, pitch: 1.12, volume: 1, preferFemale: true },
+        chair: { rate: 1.08, pitch: 0.98, volume: 1, preferFemale: false },
         pro1: { rate: 1.22, pitch: 0.96, volume: 1 },
         pro2: { rate: 1.18, pitch: 1.02, volume: 1 },
         pro3: { rate: 1.14, pitch: 1.05, volume: 1 },

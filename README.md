@@ -51,7 +51,7 @@ npm run dev
 - **Voice mode:** If you enable “Voice mode,” the browser may ask for microphone permission when you use voice input. TTS playback uses the Web Speech API and does not require a mic.
 - **Browser:** Chrome or Edge is recommended for the best TTS and SSE experience.
 - **API key:** Get a key at [OpenRouter](https://openrouter.ai/keys). In `.env`, set `OPENROUTER_MODEL`: `anthropic/claude-sonnet-4` (fast, recommended for demos) or `anthropic/claude-opus-4` (highest quality).
-- **Transcript display:** In the transcript and current-speech bar, each speaker is shown by **name only** (e.g. "Makima", "Donald Trump", "Gus Fring"). Role and side (Chair, Pro 1, Con 1, Affirmative, etc.) are shown as **separate badges** next to the name, so the same information is not repeated in parentheses after the name.
+- **Transcript display:** In the transcript and current-speech bar, each speaker is shown by **name only** (e.g. "Aristotle", "Lacan", "Turing", "Marx"). Role and side (Chair, Pro 1, Con 1, Affirmative, etc.) are shown as **separate badges** next to the name, so the same information is not repeated in parentheses after the name.
 
 ---
 

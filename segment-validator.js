@@ -80,7 +80,7 @@ function hasStageDirections(text) {
   if (/^\[.*\]\s*$/s.test(t)) return true;
   if (/^\(.*\)\s*$/s.test(t) && t.length < 100) return true;
   if (/^(Speaker|Chair|Narrator|Stage|Aside):/im.test(t)) return true;
-  if (/\*\*.*\*\*:\s*/.test(t) && /^(Makima|Trump|Light|Kant|Gus|Camus|Newton)/i.test(t)) return true;
+  if (/\*\*.*\*\*:\s*/.test(t) && /^(Aristotle|Lacan|Turing|Marx|Makima|Trump|Light|Kant|Gus|Camus|Newton)/i.test(t)) return true;
   return false;
 }
 

@@ -1,6 +1,6 @@
 # Character voice setup
 
-The project supports two ways to make debater voices closer to the characters (e.g. Pro 1 Trump style, Chair Makima): **browser TTS** and **external TTS (e.g. ElevenLabs)**.
+The project supports two ways to make debater voices closer to the characters (e.g. Chair Aristotle, Pro 1 Lacan, Pro 2 Turing, Con 1 Marx): **browser TTS** and **external TTS (e.g. ElevenLabs)**.
 
 ---
 
@@ -9,11 +9,11 @@ The project supports two ways to make debater voices closer to the characters (e
 Uses the system/browser built-in speech synthesis and assigns each role a preferred **voice name** so each character keeps a consistent “style” of voice.
 
 - **Current mapping** (in `public/app.js`, `SPEAKER_VOICE_PREFERENCES`):
-  - **Chair (Makima):** Prefer female voices (Zira, Samantha, Victoria, etc.)
-  - **Pro 1 (Trump):** Deeper / more forceful (David, Mark)
-  - **Pro 2 (Light):** Younger male (Daniel, James)
+  - **Chair (Aristotle):** Measured, male (David, George)
+  - **Pro 1 (Lacan):** Articulate, precise (David, Daniel)
+  - **Pro 2 (Turing):** Crisp, clear (Daniel, James)
   - **Pro 3 (Kant):** Mature (George)
-  - **Con 1/2/3:** Similarly assigned by role style
+  - **Con 1 (Marx) / Con 2 (Camus) / Con 3 (Newton):** Similarly assigned by role style
 
 - **Custom:** Override `window.DEBATE_SPEAKER_VOICE_PREFERENCES` before the page loads, e.g. add a script in `index.html`:
 
@@ -32,7 +32,7 @@ Uses the system/browser built-in speech synthesis and assigns each role a prefer
 <script src="app.js"></script>
 ```
 
-- **Limitation:** Browser TTS only offers generic system voices; it **cannot** reproduce “Trump himself” or anime character voices, only “one fixed system voice per role with slightly different style.”
+- **Limitation:** Browser TTS only offers generic system voices; it **cannot** reproduce a specific real person’s voice, only “one fixed system voice per role with slightly different style.”
 
 ---
 
@@ -49,11 +49,11 @@ TTS_API_KEY=your_ElevenLabs_API_Key
 TTS_VOICE_DEFAULT=default_voice_id
 
 # Per-speaker (optional; unset uses TTS_VOICE_DEFAULT)
-TTS_VOICE_CHAIR=voice_id_for_makima
-TTS_VOICE_PRO1=voice_id_for_trump_style
-TTS_VOICE_PRO2=voice_id_for_light_style
+TTS_VOICE_CHAIR=voice_id_for_aristotle
+TTS_VOICE_PRO1=voice_id_for_lacan
+TTS_VOICE_PRO2=voice_id_for_turing
 TTS_VOICE_PRO3=voice_id_for_kant_style
-TTS_VOICE_CON1=voice_id_for_gus_style
+TTS_VOICE_CON1=voice_id_for_marx
 TTS_VOICE_CON2=voice_id_for_camus_style
 TTS_VOICE_CON3=voice_id_for_newton_style
 ```
@@ -83,4 +83,4 @@ If unset, `eleven_monolingual_v1` is used by default.
 | Browser TTS           | Only fixes system voice per role | Low; edit `SPEAKER_VOICE_PREFERENCES` |
 | External TTS (ElevenLabs) | Can use/clone closer voices   | API key + set `TTS_VOICE_*` per speaker |
 
-For a Pro 1 that sounds more “Trump-like,” use **ElevenLabs** and assign a similar-style voice (or clone) to Pro 1, then set `TTS_VOICE_PRO1=that_voice_id` in `.env`.
+For a Pro 1 that sounds more like Lacan (articulate, precise), use **ElevenLabs** and assign a similar-style voice to Pro 1, then set `TTS_VOICE_PRO1=that_voice_id` in `.env`.
