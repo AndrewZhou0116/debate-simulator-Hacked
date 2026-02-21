@@ -398,6 +398,17 @@ button:focus-visible {
   margin: 0;
 }
 
+.debate-elapsed {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 2px 8px;
+}
+
+.debate-elapsed[hidden] {
+  display: none;
+}
+
 /* Fullscreen toggle: enter/exit immersion */
 .stage-fullscreen-btn {
   display: inline-flex;
@@ -600,6 +611,19 @@ button:focus-visible {
   color: var(--text-primary);
   transition: opacity var(--transition), visibility var(--transition), min-height 0.22s ease-out, padding 0.22s ease-out;
   flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.current-speech-bar .current-speech-timer {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text-muted);
+  align-self: center;
 }
 
 .current-speech-bar[hidden] {
@@ -618,6 +642,8 @@ button:focus-visible {
 .current-speech-speaker.con { color: #f9a8d4; }
 
 .current-speech-text {
+  flex: 1;
+  min-width: 0;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -858,22 +884,36 @@ button:focus-visible {
   line-height: 1.5;
 }
 
-/* Novel concept popover: fixed left, ~25% from top, larger and longer visible */
+/* Jargon/lingo explanation popover: plain-language decode when a glossary term is used */
+.concept-popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1199;
+  background: rgba(7, 6, 10, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: auto;
+  transition: opacity 0.2s ease-out;
+}
+.concept-popover-backdrop[hidden] {
+  display: none !important;
+}
+
 .concept-popover {
   position: fixed;
-  left: 20px;
-  top: 25%;
-  transform: translateY(-50%);
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   z-index: 1200;
-  width: min(420px, calc(100vw - 48px));
-  max-width: 420px;
-  padding: var(--space-lg) var(--space-xl);
+  width: min(880px, calc(100vw - 48px));
+  max-width: 880px;
+  padding: var(--space-2xl) var(--space-3xl);
   background: var(--surface);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--radius);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
-  font-size: 15px;
-  line-height: 1.55;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  font-size: 18px;
+  line-height: 1.6;
   pointer-events: auto;
 }
 .concept-popover[hidden] {
@@ -886,39 +926,47 @@ button:focus-visible {
 @keyframes concept-popover-in {
   from {
     opacity: 0;
-    transform: translateY(-50%) translateX(-8px);
+    transform: translate(-50%, -50%) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translateY(-50%) translateX(0);
+    transform: translate(-50%, -50%) scale(1);
   }
+}
+.concept-popover__label {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
 }
 .concept-popover__title {
   font-weight: 600;
   color: var(--accent);
-  margin-bottom: var(--space-sm);
-  font-size: 17px;
+  margin-bottom: var(--space-md);
+  font-size: 22px;
   letter-spacing: 0.01em;
-  padding-right: 28px;
+  padding-right: 80px;
 }
 .concept-popover__body {
   color: var(--text-secondary);
   margin-bottom: 0;
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 18px;
+  line-height: 1.6;
 }
 .concept-popover__close {
   position: absolute;
-  top: var(--space-sm);
-  right: var(--space-sm);
+  top: var(--space-md);
+  right: var(--space-md);
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 20px;
+  font-size: 16px;
+  font-weight: 500;
   line-height: 1;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 6px;
 }
 .concept-popover__close:hover {
   color: var(--text-primary);
@@ -1012,13 +1060,30 @@ button:focus-visible {
   gap: 14px;
 }
 
+.your-turn-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .your-turn-title {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-primary);
-  text-align: center;
+}
+
+.your-turn-timer {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.your-turn-timer.low {
+  color: var(--destructive);
 }
 
 .your-turn-text-input {

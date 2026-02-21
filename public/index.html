@@ -74,7 +74,10 @@
       <!-- Your turn: pops up 2s before slot; type or voice, then submit -->
       <div id="yourTurnPopup" class="your-turn-popup" hidden>
         <div class="your-turn-content">
-          <p class="your-turn-title">Your turn</p>
+          <div class="your-turn-title-row">
+            <p class="your-turn-title">Your turn</p>
+            <span id="yourTurnTimer" class="your-turn-timer" aria-live="polite"></span>
+          </div>
           <textarea id="yourTurnTextInput" class="your-turn-text-input" placeholder="Type or speak…" rows="2"></textarea>
           <div class="your-turn-transcript" id="yourTurnTranscript" aria-live="polite"></div>
           <div class="your-turn-actions">
@@ -88,6 +91,7 @@
         <div class="stage-hero" id="stageHero">
           <div class="stage-hero-header">
             <p class="stage-hero-label">Debate Stage</p>
+            <span id="debateElapsed" class="debate-elapsed" aria-live="polite" hidden></span>
             <button type="button" id="stageFullscreenBtn" class="stage-fullscreen-btn" title="Enter fullscreen (immersion mode)" aria-label="Enter fullscreen">
               <span class="stage-fullscreen-btn-icon" aria-hidden="true"></span>
               <span class="stage-fullscreen-btn-text">Fullscreen</span>
@@ -149,6 +153,7 @@
             <div id="currentSpeechBar" class="current-speech-bar" aria-live="polite" hidden>
               <span id="currentSpeechSpeaker" class="current-speech-speaker"></span>
               <span id="currentSpeechText" class="current-speech-text"></span>
+              <span id="currentSpeechTimer" class="current-speech-timer" aria-live="polite"></span>
             </div>
           </section>
           </div>
@@ -183,11 +188,13 @@
       </div>
     </div>
 
-    <!-- Novel concept popover: appears when a debater uses a glossary term -->
-    <div id="conceptPopover" class="concept-popover" hidden aria-live="polite" role="status">
+    <!-- Jargon/lingo explanation popover: when a debater uses a glossary term, show plain-language explanation -->
+    <div id="conceptPopoverBackdrop" class="concept-popover-backdrop" hidden aria-hidden="true"></div>
+    <div id="conceptPopover" class="concept-popover" hidden aria-live="polite" role="dialog" aria-modal="true" aria-label="Jargon or term explained in plain language">
+      <div class="concept-popover__label" aria-hidden="true">In plain language</div>
       <div class="concept-popover__title" id="conceptPopoverTitle"></div>
       <div class="concept-popover__body" id="conceptPopoverBody"></div>
-      <button type="button" class="concept-popover__close" id="conceptPopoverClose" aria-label="Close">&times;</button>
+      <button type="button" class="concept-popover__close" id="conceptPopoverClose" aria-label="Close">Got it</button>
     </div>
 
     <script>window.__API_BASE__ = "";</script>

@@ -18,13 +18,20 @@
   const endSpeakBtn = document.getElementById("endSpeakBtn");
   const stageContainer = document.getElementById("stageContainer");
   const conceptPopoverEl = document.getElementById("conceptPopover");
+  const conceptPopoverBackdropEl = document.getElementById("conceptPopoverBackdrop");
   const conceptPopoverTitleEl = document.getElementById("conceptPopoverTitle");
   const conceptPopoverBodyEl = document.getElementById("conceptPopoverBody");
   const conceptPopoverCloseBtn = document.getElementById("conceptPopoverClose");
+  const yourTurnTimerEl = document.getElementById("yourTurnTimer");
+  const debateElapsedEl = document.getElementById("debateElapsed");
+  const currentSpeechTimerEl = document.getElementById("currentSpeechTimer");
+
+  /** Timer: your-turn countdown (matches server USER_SPEECH_TIMEOUT_MS). */
+  const USER_TURN_TIMEOUT_MS = 120000;
+  /** Timer: per-speech countdown display (soft, no cut). */
+  const SPEECH_TIMER_SECONDS = 60;
 
   const CONCEPT_POPOVER_DURATION_MS = 12000;
-  const CONCEPT_POPOVER_LEFT_PX = 20;
-  const CONCEPT_POPOVER_TOP_PERCENT = 25;
   let conceptPopoverHideTimer = null;
 
   function hideConceptPopover() {
@@ -32,22 +39,22 @@
       clearTimeout(conceptPopoverHideTimer);
       conceptPopoverHideTimer = null;
     }
+    if (conceptPopoverBackdropEl) conceptPopoverBackdropEl.hidden = true;
     if (conceptPopoverEl) conceptPopoverEl.hidden = true;
   }
 
-  function showConceptPopover(anchorElement, concept, explanation) {
+  function showConceptPopover(concept, explanation) {
     if (!conceptPopoverEl || !conceptPopoverTitleEl || !conceptPopoverBodyEl || !concept || !explanation) return;
     hideConceptPopover();
     conceptPopoverTitleEl.textContent = concept;
     conceptPopoverBodyEl.textContent = explanation;
+    if (conceptPopoverBackdropEl) conceptPopoverBackdropEl.hidden = false;
     conceptPopoverEl.hidden = false;
-    conceptPopoverEl.style.left = CONCEPT_POPOVER_LEFT_PX + "px";
-    conceptPopoverEl.style.top = CONCEPT_POPOVER_TOP_PERCENT + "%";
-    conceptPopoverEl.style.transform = "translateY(-50%)";
     conceptPopoverHideTimer = setTimeout(hideConceptPopover, CONCEPT_POPOVER_DURATION_MS);
   }
 
   if (conceptPopoverCloseBtn) conceptPopoverCloseBtn.addEventListener("click", hideConceptPopover);
+  if (conceptPopoverBackdropEl) conceptPopoverBackdropEl.addEventListener("click", hideConceptPopover);
   document.addEventListener("click", (e) => {
     if (!conceptPopoverEl || conceptPopoverEl.hidden) return;
     if (conceptPopoverEl.contains(e.target)) return;
@@ -62,8 +69,48 @@
   let currentSegmentId = null;
   let currentSpeakerId = null;
   let currentSpeakerSide = null;
-  /** When set, show "your turn" popup only after TTS queue has drained (so popup appears when it's really the user's turn). */
-  let pendingYourTurnSegmentId = null;
+
+  let yourTurnTimerInterval = null;
+  let debateElapsedInterval = null;
+  let debateStartTime = null;
+  let speechTimerInterval = null;
+  let speechTimerRemaining = 0;
+
+  function formatRemainingMs(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const m = Math.floor(s / 60);
+    return m + ":" + String(s % 60).padStart(2, "0");
+  }
+  function formatElapsedMs(ms) {
+    const s = Math.floor(ms / 1000);
+    const m = Math.floor(s / 60);
+    return m + ":" + String(s % 60).padStart(2, "0");
+  }
+
+  function startDebateElapsedTimer() {
+    if (debateElapsedInterval) clearInterval(debateElapsedInterval);
+    debateStartTime = Date.now();
+    if (debateElapsedEl) {
+      debateElapsedEl.hidden = false;
+      debateElapsedEl.textContent = "0:00";
+    }
+    debateElapsedInterval = setInterval(() => {
+      if (debateStartTime == null || !debateElapsedEl) return;
+      debateElapsedEl.textContent = formatElapsedMs(Date.now() - debateStartTime);
+    }, 1000);
+  }
+
+  function stopDebateElapsedTimer() {
+    if (debateElapsedInterval) {
+      clearInterval(debateElapsedInterval);
+      debateElapsedInterval = null;
+    }
+    debateStartTime = null;
+    if (debateElapsedEl) {
+      debateElapsedEl.hidden = true;
+      debateElapsedEl.textContent = "";
+    }
+  }
 
   const characterIds = ["chair", "pro1", "pro2", "pro3", "con1", "con2", "con3"];
 
@@ -78,7 +125,7 @@
     con3: "Isaac Newton"
   };
 
-  /** Concept glossary for "novel concept" popover: phrase → explanation. Sorted by phrase length desc for longest-match first. */
+  /** Jargon/lingo glossary: when a debater uses a specialist term (phrase), show plain-language explanation. Sorted by phrase length desc for longest-match first. */
   const CONCEPT_GLOSSARY = [
     { phrase: "banality of evil", explanation: "The idea that great harm can be done by ordinary people following procedures without questioning them (Arendt)." },
     { phrase: "Goodhart's law", explanation: "When a measure becomes a target, it ceases to be a good measure—people optimize for the metric rather than the goal." },
@@ -123,16 +170,16 @@
     if (!text || typeof text !== "string") return null;
     const t = text.trim();
     if (!t) return null;
-    const lower = t.toLowerCase();
+    const lower = text.toLowerCase();
     for (let i = 0; i < CONCEPT_GLOSSARY.length; i++) {
       const { phrase, explanation } = CONCEPT_GLOSSARY[i];
       const idx = lower.indexOf(phrase.toLowerCase());
       if (idx === -1) continue;
-      const before = idx === 0 ? " " : t[idx - 1];
-      const after = idx + phrase.length >= t.length ? " " : t[idx + phrase.length];
+      const before = idx === 0 ? " " : text[idx - 1];
+      const after = idx + phrase.length >= text.length ? " " : text[idx + phrase.length];
       const wordChar = /[a-zA-Z0-9']/;
       if (wordChar.test(before) || wordChar.test(after)) continue;
-      return { concept: phrase, explanation };
+      return { concept: phrase, explanation, index: idx };
     }
     return null;
   }
@@ -582,7 +629,8 @@
     }
   }
 
-  function runTypewriter(textSpan, text, durationMs, onDone, mirrorTextEl) {
+  /** @param {{ index: number, concept: string, explanation: string }} [conceptTrigger] - show concept popover when typewriter reaches this index */
+  function runTypewriter(textSpan, text, durationMs, onDone, mirrorTextEl, conceptTrigger) {
     if (!text || typewriterAborted) {
       if (onDone) onDone();
       return;
@@ -590,6 +638,7 @@
     const len = text.length;
     const interval = durationMs / len;
     let i = 0;
+    let conceptShown = false;
     function tick() {
       if (typewriterAborted) {
         if (onDone) onDone();
@@ -601,6 +650,10 @@
         textSpan.textContent = slice;
         if (mirrorTextEl) mirrorTextEl.textContent = slice;
         if (isTranscriptNearBottom()) scrollTranscriptToLatest("auto");
+        if (conceptTrigger && !conceptShown && i >= conceptTrigger.index) {
+          conceptShown = true;
+          showConceptPopover(conceptTrigger.concept, conceptTrigger.explanation);
+        }
         const t = setTimeout(tick, interval);
         typewriterTimeouts.push(t);
       } else {
@@ -620,6 +673,11 @@
   }
 
   function clearCurrentSpeechBar() {
+    if (speechTimerInterval) {
+      clearInterval(speechTimerInterval);
+      speechTimerInterval = null;
+    }
+    if (currentSpeechTimerEl) currentSpeechTimerEl.textContent = "";
     if (!currentSpeechBar || !currentSpeechSpeaker || !currentSpeechText) return;
     currentSpeechBar.hidden = true;
     currentSpeechSpeaker.textContent = "";
@@ -659,11 +717,6 @@
     const item = speakQueue.shift();
     if (!item) {
       ttsLog("drain", { queueLength: 0 });
-      if (pendingYourTurnSegmentId != null) {
-        const seg = pendingYourTurnSegmentId;
-        pendingYourTurnSegmentId = null;
-        showYourTurnPopup(seg, true);
-      }
       return;
     }
 
@@ -735,6 +788,19 @@
     /** Show text and start typewriter when audio actually starts (sync text with voice). */
     function showTextWhenAudioStarts() {
       updateCurrentSpeechBar(getDisplayName(item.speakerId, item.speakerLabel), item.roleType || "debater", side, text);
+      if (!item.isObjection && !item.isRuling && currentSpeechTimerEl) {
+        if (speechTimerInterval) clearInterval(speechTimerInterval);
+        speechTimerRemaining = SPEECH_TIMER_SECONDS;
+        currentSpeechTimerEl.textContent = "0:" + String(speechTimerRemaining).padStart(2, "0");
+        speechTimerInterval = setInterval(() => {
+          speechTimerRemaining -= 1;
+          if (currentSpeechTimerEl) currentSpeechTimerEl.textContent = "0:" + String(Math.max(0, speechTimerRemaining)).padStart(2, "0");
+          if (speechTimerRemaining <= 0 && speechTimerInterval) {
+            clearInterval(speechTimerInterval);
+            speechTimerInterval = null;
+          }
+        }, 1000);
+      }
       let span = null;
       if (!item.isObjection && !item.isRuling) {
         span = createTranscriptLine(getDisplayName(item.speakerId, item.speakerLabel), item.roleType || "debater", side, item.speakerId, true, "speech", speechMeta);
@@ -748,16 +814,13 @@
           meta: speechMeta || undefined
         };
         transcriptTurns.push(turn);
-        runTypewriter(span || document.createElement("span"), text, typewriterDurationMs, () => onUtteranceDone(), currentSpeechText);
-        // Defer concept detection so it never blocks audio/text sync; popover after a short delay
-        setTimeout(() => {
-          const hit = text ? detectConcept(text) : null;
-          if (hit && span && span.parentElement) {
-            turn.concept = hit.concept;
-            turn.explanation = hit.explanation;
-            setTimeout(() => showConceptPopover(span.parentElement, hit.concept, hit.explanation), 800);
-          }
-        }, 0);
+        const hit = text ? detectConcept(text) : null;
+        if (hit) {
+          turn.concept = hit.concept;
+          turn.explanation = hit.explanation;
+        }
+        const conceptTrigger = hit ? { index: hit.index, concept: hit.concept, explanation: hit.explanation } : undefined;
+        runTypewriter(span || document.createElement("span"), text, typewriterDurationMs, () => onUtteranceDone(), currentSpeechText, conceptTrigger);
       }
     }
     const { voice, rate, pitch, volume } = VOICE_MANAGER.pick(item.speakerId, item.roleType);
@@ -877,7 +940,6 @@
     const displayName = getDisplayName(speakerId, speakerLabel);
     const type = entryType || "speech";
     const textSpan = createTranscriptLine(displayName, roleType || "debater", side, speakerId, false, type, meta);
-    textSpan.textContent = text || "";
     const turn = {
       speakerId: speakerId || undefined,
       speakerLabel: displayName,
@@ -893,8 +955,14 @@
       if (hit) {
         turn.concept = hit.concept;
         turn.explanation = hit.explanation;
-        showConceptPopover(textSpan.parentElement, hit.concept, hit.explanation);
+        const conceptTrigger = { index: hit.index, concept: hit.concept, explanation: hit.explanation };
+        const noVoiceDurationMs = Math.min(3000, Math.max(1500, text.length * 22));
+        runTypewriter(textSpan, text, noVoiceDurationMs, () => {}, null, conceptTrigger);
+      } else {
+        textSpan.textContent = text || "";
       }
+    } else {
+      textSpan.textContent = text || "";
     }
   }
 
@@ -979,14 +1047,36 @@
     if (voiceInputBtn) voiceInputBtn.textContent = "Voice";
     if (endSpeakBtn) endSpeakBtn.disabled = false;
     if (focusInput && yourTurnTextInput) yourTurnTextInput.focus();
+
+    if (yourTurnTimerInterval) clearInterval(yourTurnTimerInterval);
+    yourTurnTimerInterval = null;
+    const deadline = Date.now() + USER_TURN_TIMEOUT_MS;
+    function tick() {
+      const left = Math.max(0, deadline - Date.now());
+      if (yourTurnTimerEl) {
+        yourTurnTimerEl.textContent = formatRemainingMs(left);
+        yourTurnTimerEl.classList.toggle("low", left > 0 && left <= 30000);
+      }
+      if (left <= 0 && yourTurnTimerInterval) {
+        clearInterval(yourTurnTimerInterval);
+        yourTurnTimerInterval = null;
+      }
+    }
+    tick();
+    yourTurnTimerInterval = setInterval(tick, 1000);
   }
 
   function hideYourTurnPopup() {
     if (yourTurnPopup) yourTurnPopup.hidden = true;
     currentYourTurnSegmentId = null;
-    pendingYourTurnSegmentId = null;
     userSpeechTranscript = "";
     if (yourTurnTextInput) yourTurnTextInput.value = "";
+    if (yourTurnTimerInterval) {
+      clearInterval(yourTurnTimerInterval);
+      yourTurnTimerInterval = null;
+    }
+    if (yourTurnTimerEl) yourTurnTimerEl.textContent = "";
+    if (yourTurnTimerEl) yourTurnTimerEl.classList.remove("low");
     if (recognition && isRecording) {
       try { recognition.stop(); } catch (e) {}
       isRecording = false;
@@ -1029,9 +1119,10 @@
         if (data.streamId) currentStreamId = data.streamId;
         if (data.segmentId != null) currentSegmentId = data.segmentId;
         if (data.message === "debate_started") {
-          /* debater objection dialogue (AI vs AI) still shown in transcript */
+          startDebateElapsedTimer();
         }
         if (data.message === "debate_finished") {
+          stopDebateElapsedTimer();
           showPreparingState(false);
           startBtn.disabled = false;
           hideYourTurnPopup();
@@ -1040,23 +1131,14 @@
         }
       } else if (data.type === "error") {
         const code = data.code || 500;
+        stopDebateElapsedTimer();
         showPreparingState(false);
         showToast("Generation error (" + code + "). Check server .env key.");
         startBtn.disabled = false;
         hideYourTurnPopup();
       } else if (data.type === "your_turn_soon" || data.type === "your_turn") {
         if (data.segmentId != null) currentSegmentId = data.segmentId;
-        if (data.type === "your_turn_soon") {
-          /* Do not show popup yet; wait until it's really the user's turn (after queue drain or when no voice). */
-        } else {
-          const voiceMode = getVoiceMode();
-          const queueEmpty = speakQueue.length === 0 && !isSpeaking;
-          if (!voiceMode || queueEmpty) {
-            showYourTurnPopup(data.segmentId, true);
-          } else {
-            pendingYourTurnSegmentId = data.segmentId;
-          }
-        }
+        showYourTurnPopup(data.segmentId, data.type === "your_turn");
       } else if (data.type === "speech") {
         showPreparingState(false);
         if (data.speakerId != null) currentSpeakerId = data.speakerId;
@@ -1148,6 +1230,7 @@
     };
 
     eventSource.onerror = () => {
+      stopDebateElapsedTimer();
       showPreparingState(false);
       if (eventSource) {
         eventSource.close();
@@ -1318,8 +1401,9 @@
   }
 
   function onStopReset() {
-    showPreparingState(false);
+    stopDebateElapsedTimer();
     hideYourTurnPopup();
+    showPreparingState(false);
     if (eventSource) {
       eventSource.close();
       eventSource = null;
