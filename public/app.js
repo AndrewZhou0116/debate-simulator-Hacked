@@ -22,7 +22,9 @@
   const conceptPopoverBodyEl = document.getElementById("conceptPopoverBody");
   const conceptPopoverCloseBtn = document.getElementById("conceptPopoverClose");
 
-  const CONCEPT_POPOVER_DURATION_MS = 6000;
+  const CONCEPT_POPOVER_DURATION_MS = 12000;
+  const CONCEPT_POPOVER_LEFT_PX = 20;
+  const CONCEPT_POPOVER_TOP_PERCENT = 25;
   let conceptPopoverHideTimer = null;
 
   function hideConceptPopover() {
@@ -39,20 +41,9 @@
     conceptPopoverTitleEl.textContent = concept;
     conceptPopoverBodyEl.textContent = explanation;
     conceptPopoverEl.hidden = false;
-    const rect = anchorElement ? anchorElement.getBoundingClientRect() : null;
-    if (rect) {
-      const padding = 8;
-      const popoverHeight = 120;
-      let top = rect.bottom + padding;
-      if (top + popoverHeight > window.innerHeight - 16) top = rect.top - popoverHeight - padding;
-      conceptPopoverEl.style.top = Math.max(12, top) + "px";
-      conceptPopoverEl.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - 12 - 320)) + "px";
-      conceptPopoverEl.style.transform = "";
-    } else {
-      conceptPopoverEl.style.top = "80px";
-      conceptPopoverEl.style.left = "50%";
-      conceptPopoverEl.style.transform = "translateX(-50%)";
-    }
+    conceptPopoverEl.style.left = CONCEPT_POPOVER_LEFT_PX + "px";
+    conceptPopoverEl.style.top = CONCEPT_POPOVER_TOP_PERCENT + "%";
+    conceptPopoverEl.style.transform = "translateY(-50%)";
     conceptPopoverHideTimer = setTimeout(hideConceptPopover, CONCEPT_POPOVER_DURATION_MS);
   }
 
@@ -71,6 +62,8 @@
   let currentSegmentId = null;
   let currentSpeakerId = null;
   let currentSpeakerSide = null;
+  /** When set, show "your turn" popup only after TTS queue has drained (so popup appears when it's really the user's turn). */
+  let pendingYourTurnSegmentId = null;
 
   const characterIds = ["chair", "pro1", "pro2", "pro3", "con1", "con2", "con3"];
 
@@ -666,6 +659,11 @@
     const item = speakQueue.shift();
     if (!item) {
       ttsLog("drain", { queueLength: 0 });
+      if (pendingYourTurnSegmentId != null) {
+        const seg = pendingYourTurnSegmentId;
+        pendingYourTurnSegmentId = null;
+        showYourTurnPopup(seg, true);
+      }
       return;
     }
 
@@ -986,6 +984,7 @@
   function hideYourTurnPopup() {
     if (yourTurnPopup) yourTurnPopup.hidden = true;
     currentYourTurnSegmentId = null;
+    pendingYourTurnSegmentId = null;
     userSpeechTranscript = "";
     if (yourTurnTextInput) yourTurnTextInput.value = "";
     if (recognition && isRecording) {
@@ -1047,7 +1046,17 @@
         hideYourTurnPopup();
       } else if (data.type === "your_turn_soon" || data.type === "your_turn") {
         if (data.segmentId != null) currentSegmentId = data.segmentId;
-        showYourTurnPopup(data.segmentId, data.type === "your_turn");
+        if (data.type === "your_turn_soon") {
+          /* Do not show popup yet; wait until it's really the user's turn (after queue drain or when no voice). */
+        } else {
+          const voiceMode = getVoiceMode();
+          const queueEmpty = speakQueue.length === 0 && !isSpeaking;
+          if (!voiceMode || queueEmpty) {
+            showYourTurnPopup(data.segmentId, true);
+          } else {
+            pendingYourTurnSegmentId = data.segmentId;
+          }
+        }
       } else if (data.type === "speech") {
         showPreparingState(false);
         if (data.speakerId != null) currentSpeakerId = data.speakerId;
@@ -1310,6 +1319,7 @@
 
   function onStopReset() {
     showPreparingState(false);
+    hideYourTurnPopup();
     if (eventSource) {
       eventSource.close();
       eventSource = null;

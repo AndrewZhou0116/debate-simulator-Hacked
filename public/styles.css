@@ -858,18 +858,22 @@ button:focus-visible {
   line-height: 1.5;
 }
 
-/* Novel concept popover: small card when a debater uses a glossary term */
+/* Novel concept popover: fixed left, ~25% from top, larger and longer visible */
 .concept-popover {
   position: fixed;
+  left: 20px;
+  top: 25%;
+  transform: translateY(-50%);
   z-index: 1200;
-  max-width: 320px;
-  padding: var(--space-sm) var(--space-md);
+  width: min(420px, calc(100vw - 48px));
+  max-width: 420px;
+  padding: var(--space-lg) var(--space-xl);
   background: var(--surface);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  font-size: 13px;
-  line-height: 1.45;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  font-size: 15px;
+  line-height: 1.55;
   pointer-events: auto;
 }
 .concept-popover[hidden] {
@@ -877,42 +881,48 @@ button:focus-visible {
 }
 .concept-popover:not([hidden]) {
   display: block;
-  animation: concept-popover-in 0.2s ease-out;
+  animation: concept-popover-in 0.25s ease-out;
 }
 @keyframes concept-popover-in {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-50%) translateX(-8px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(-50%) translateX(0);
   }
 }
 .concept-popover__title {
   font-weight: 600;
   color: var(--accent);
-  margin-bottom: 4px;
-  font-size: 14px;
+  margin-bottom: var(--space-sm);
+  font-size: 17px;
+  letter-spacing: 0.01em;
+  padding-right: 28px;
 }
 .concept-popover__body {
   color: var(--text-secondary);
-  margin-bottom: 6px;
+  margin-bottom: 0;
+  font-size: 15px;
+  line-height: 1.55;
 }
 .concept-popover__close {
   position: absolute;
-  top: 6px;
-  right: 8px;
+  top: var(--space-sm);
+  right: var(--space-sm);
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
   cursor: pointer;
-  padding: 2px;
+  padding: 4px;
+  border-radius: 4px;
 }
 .concept-popover__close:hover {
   color: var(--text-primary);
+  background: var(--surface-hover);
 }
 
 .transcript-speaker {
