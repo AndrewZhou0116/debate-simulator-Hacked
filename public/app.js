@@ -125,63 +125,20 @@
     con3: "Isaac Newton"
   };
 
-  /** Jargon/lingo glossary: when a debater uses a specialist term (phrase), show plain-language explanation. Sorted by phrase length desc for longest-match first. */
-  const CONCEPT_GLOSSARY = [
-    { phrase: "banality of evil", explanation: "The idea that great harm can be done by ordinary people following procedures without questioning them (Arendt)." },
-    { phrase: "Goodhart's law", explanation: "When a measure becomes a target, it ceases to be a good measure—people optimize for the metric rather than the goal." },
-    { phrase: "commodity fetishism", explanation: "Treating social relations as relations between things; the abstraction of labour and value into exchange (Marx)." },
-    { phrase: "universalization test", explanation: "A principle is morally acceptable only if one could will it as a universal law for everyone (Kant)." },
-    { phrase: "persons as ends", explanation: "Treating people as ends in themselves, never merely as means to an end (Kant)." },
-    { phrase: "categorical imperative", explanation: "Act only on maxims that you could will to become universal law; never treat persons merely as means (Kant)." },
-    { phrase: "the Other", explanation: "The symbolic order or social authority that shapes desire and recognition (Lacan)." },
-    { phrase: "sliding signifier", explanation: "A signifier that has no fixed meaning and shifts depending on context and desire (Lacan)." },
-    { phrase: "signifier", explanation: "A unit of language that carries meaning in relation to other signifiers rather than a fixed referent (Lacan)." },
-    { phrase: "moral hazard", explanation: "When one party is insulated from the consequences of their actions, they may take more risk." },
-    { phrase: "adversarial robustness", explanation: "A system's ability to remain correct when inputs are deliberately designed to break or fool it." },
-    { phrase: "falsifiability", explanation: "A claim is scientific only if it can in principle be disproven by observation (Popper)." },
-    { phrase: "slippery slope", explanation: "The argument that one step will lead to a chain of worse consequences." },
-    { phrase: "efficiency is not innocence", explanation: "A procedure can be administratively clean while still producing unjust or cruel outcomes." },
-    { phrase: "clean procedure", explanation: "A process that appears neutral but may hide who bears the cost or who decides." },
-    { phrase: "ideology", explanation: "Beliefs that present contingent social arrangements as natural or inevitable (Marx/critical theory)." },
-    { phrase: "structural dependence", explanation: "When one group's options are determined by institutional rules and power rather than choice alone." },
-    { phrase: "who bears the cost", explanation: "The question of who pays when a policy fails or has unintended effects." },
-    { phrase: "incentive distortion", explanation: "When rules or metrics change behaviour in ways that undermine the original goal." },
-    { phrase: "governance vacuum", explanation: "A situation where no one is clearly accountable for decisions or their consequences." },
-    { phrase: "human in the loop", explanation: "Keeping a human responsible for final or override decisions in an automated system." },
-    { phrase: "appeal", explanation: "A right or mechanism to contest a decision before an independent body." },
-    { phrase: "override", explanation: "A mechanism allowing a human or authority to overrule an automated outcome." },
-    { phrase: "scope", explanation: "Defining what is inside and outside the domain of a rule or system." },
-    { phrase: "audit", explanation: "Independent review of how a system or process performed and whether it met standards." },
-    { phrase: "Myth of Sisyphus", explanation: "Camus's essay on finding meaning in the face of the absurd—revolt and lucidity." },
-    { phrase: "the absurd", explanation: "The conflict between the human need for meaning and the silent indifference of the world (Camus)." },
-    { phrase: "mere means", explanation: "Using someone only as an instrument for another end, without regard for their dignity (Kant)." },
-    { phrase: "cannot universalize", explanation: "A maxim that cannot be consistently willed as a universal law is morally inadmissible (Kant)." },
-    { phrase: "self-contradictory", explanation: "A claim or maxim that contradicts itself when applied universally (Kant)." },
-    { phrase: "hidden bargain", explanation: "The unstated trade-off or cost that a proposal implicitly asks others to accept." },
-    { phrase: "master word", explanation: "A key term that organizes an entire argument and carries unstated assumptions." },
-    { phrase: "frame", explanation: "The way a problem or issue is defined, which shapes what counts as a solution." },
-    { phrase: "fantasy", explanation: "The narrative or scenario that makes a policy or desire seem coherent (Lacan)." },
-    { phrase: "desire", explanation: "In Lacan: desire is structured by language and the Other, not a simple want." },
-    { phrase: "extraction", explanation: "Taking value or control from a group without equivalent return; often used in political economy." },
-    { phrase: "contestability", explanation: "The ability of those affected to challenge a decision or rule." }
-  ].sort((a, b) => (b.phrase.length - a.phrase.length));
-
-  function detectConcept(text) {
-    if (!text || typeof text !== "string") return null;
-    const t = text.trim();
-    if (!t) return null;
-    const lower = text.toLowerCase();
-    for (let i = 0; i < CONCEPT_GLOSSARY.length; i++) {
-      const { phrase, explanation } = CONCEPT_GLOSSARY[i];
-      const idx = lower.indexOf(phrase.toLowerCase());
-      if (idx === -1) continue;
-      const before = idx === 0 ? " " : text[idx - 1];
-      const after = idx + phrase.length >= text.length ? " " : text[idx + phrase.length];
-      const wordChar = /[a-zA-Z0-9']/;
-      if (wordChar.test(before) || wordChar.test(after)) continue;
-      return { concept: phrase, explanation, index: idx };
-    }
-    return null;
+  /** Ask backend to detect one jargon/specialist term in debate text and return plain-language explanation (no fixed table). */
+  function fetchExplainConcept(text) {
+    if (!text || typeof text !== "string" || text.length > 4000) return Promise.resolve({ concept: null, explanation: null });
+    return fetch(`${API_BASE}/api/explain-concept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    })
+      .then((r) => (r.ok ? r.json() : { concept: null, explanation: null }))
+      .then((data) => ({
+        concept: data.concept && typeof data.concept === "string" ? data.concept.trim() : null,
+        explanation: data.explanation && typeof data.explanation === "string" ? data.explanation.trim() : null
+      }))
+      .catch(() => ({ concept: null, explanation: null }));
   }
 
   function getDisplayName(speakerId, fallbackLabel) {
@@ -629,8 +586,8 @@
     }
   }
 
-  /** @param {{ index: number, concept: string, explanation: string }} [conceptTrigger] - show concept popover when typewriter reaches this index */
-  function runTypewriter(textSpan, text, durationMs, onDone, mirrorTextEl, conceptTrigger) {
+  /** @param {{ current?: { index: number, concept: string, explanation: string } | null }} [conceptTriggerRef] - ref filled async by API; popover when typewriter reaches index */
+  function runTypewriter(textSpan, text, durationMs, onDone, mirrorTextEl, conceptTriggerRef) {
     if (!text || typewriterAborted) {
       if (onDone) onDone();
       return;
@@ -650,9 +607,10 @@
         textSpan.textContent = slice;
         if (mirrorTextEl) mirrorTextEl.textContent = slice;
         if (isTranscriptNearBottom()) scrollTranscriptToLatest("auto");
-        if (conceptTrigger && !conceptShown && i >= conceptTrigger.index) {
+        const trigger = conceptTriggerRef && conceptTriggerRef.current;
+        if (trigger && !conceptShown && i >= trigger.index) {
           conceptShown = true;
-          showConceptPopover(conceptTrigger.concept, conceptTrigger.explanation);
+          showConceptPopover(trigger.concept, trigger.explanation);
         }
         const t = setTimeout(tick, interval);
         typewriterTimeouts.push(t);
@@ -814,13 +772,16 @@
           meta: speechMeta || undefined
         };
         transcriptTurns.push(turn);
-        const hit = text ? detectConcept(text) : null;
-        if (hit) {
-          turn.concept = hit.concept;
-          turn.explanation = hit.explanation;
-        }
-        const conceptTrigger = hit ? { index: hit.index, concept: hit.concept, explanation: hit.explanation } : undefined;
-        runTypewriter(span || document.createElement("span"), text, typewriterDurationMs, () => onUtteranceDone(), currentSpeechText, conceptTrigger);
+        const conceptTriggerRef = { current: null };
+        runTypewriter(span || document.createElement("span"), text, typewriterDurationMs, () => onUtteranceDone(), currentSpeechText, conceptTriggerRef);
+        fetchExplainConcept(text).then((r) => {
+          if (r.concept && r.explanation) {
+            const idx = text.indexOf(r.concept);
+            conceptTriggerRef.current = { index: idx >= 0 ? idx : 0, concept: r.concept, explanation: r.explanation };
+            turn.concept = r.concept;
+            turn.explanation = r.explanation;
+          }
+        });
       }
     }
     const { voice, rate, pitch, volume } = VOICE_MANAGER.pick(item.speakerId, item.roleType);
@@ -951,16 +912,14 @@
     };
     transcriptTurns.push(turn);
     if (type === "speech" && text) {
-      const hit = detectConcept(text);
-      if (hit) {
-        turn.concept = hit.concept;
-        turn.explanation = hit.explanation;
-        const conceptTrigger = { index: hit.index, concept: hit.concept, explanation: hit.explanation };
-        const noVoiceDurationMs = Math.min(3000, Math.max(1500, text.length * 22));
-        runTypewriter(textSpan, text, noVoiceDurationMs, () => {}, null, conceptTrigger);
-      } else {
-        textSpan.textContent = text || "";
-      }
+      textSpan.textContent = text || "";
+      fetchExplainConcept(text).then((r) => {
+        if (r.concept && r.explanation) {
+          turn.concept = r.concept;
+          turn.explanation = r.explanation;
+          showConceptPopover(r.concept, r.explanation);
+        }
+      });
     } else {
       textSpan.textContent = text || "";
     }

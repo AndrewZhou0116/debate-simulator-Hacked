@@ -466,6 +466,42 @@ async function ttsElevenLabs(apiKey, { text, voiceId, speed = 1 }) {
   return buf.length ? buf : null;
 }
 
+/** Jargon/lingo explanation: one short LLM call to detect a specialist term in debate text and return plain-language explanation. */
+const EXPLAIN_CONCEPT_SYSTEM = `You are a jargon detector for debate audiences. Given a single sentence or short paragraph from a debate, identify at most ONE specialist term, piece of jargon, or named concept (from philosophy, law, politics, theory, or culture) that a general audience might not know. If you find one, respond with valid JSON only, no other text: {"concept":"exact phrase as it appears in the text","explanation":"Two to four sentences in plain English explaining what it means and why it matters in debate."} If there is no such term, or the text is too short or generic, respond with: {"concept":null,"explanation":null}`;
+
+app.post("/api/explain-concept", async (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  const text = (req.body?.text || "").toString().trim();
+  if (!text || text.length > 4000) {
+    return res.status(400).json({ concept: null, explanation: null });
+  }
+  try {
+    const result = await fetchOpenRouterWithFallback(
+      {
+        model: OPENROUTER_MODEL_CHEAP,
+        max_tokens: 320,
+        messages: [
+          { role: "system", content: EXPLAIN_CONCEPT_SYSTEM },
+          { role: "user", content: text }
+        ]
+      },
+      { requestTimeoutMs: 8000, primaryModel: OPENROUTER_MODEL_CHEAP }
+    );
+    if (!result.ok || !result.data?.choices?.[0]?.message?.content) {
+      return res.json({ concept: null, explanation: null });
+    }
+    const raw = result.data.choices[0].message.content.trim();
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    const concept = parsed.concept && typeof parsed.concept === "string" ? parsed.concept.trim() : null;
+    const explanation = concept && parsed.explanation && typeof parsed.explanation === "string" ? parsed.explanation.trim() : null;
+    return res.json({ concept: concept || null, explanation: explanation || null });
+  } catch (e) {
+    console.warn("[explain-concept]", e?.message || e);
+    return res.json({ concept: null, explanation: null });
+  }
+});
+
 app.post("/api/tts", async (req, res) => {
   if (TTS_MODE !== "external" || !TTS_API_KEY) {
     return res.status(501).json({ error: "External TTS not configured; use browser TTS." });
